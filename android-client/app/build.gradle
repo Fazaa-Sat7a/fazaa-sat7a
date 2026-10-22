@@ -1,4 +1,15 @@
 plugins { id 'com.android.application'; id 'com.google.gms.google-services' }
+
+def signingFile = System.getenv('FAZAA_KEYSTORE_FILE')
+def signingPassword = System.getenv('FAZAA_KEYSTORE_PASSWORD')
+def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+def requestedCode = (project.findProperty('fazaaVersionCode') ?: '4').toString()
+if (!(requestedCode ==~ /[0-9]+/) || requestedCode.toLong() < 4 || requestedCode.toLong() > 2100000000L) {
+    throw new GradleException('Invalid customer version code')
+}
+if (releaseRequested && (!signingFile || !signingPassword || !file(signingFile).isFile())) {
+    throw new GradleException('Stable customer signing credentials are required for release; no debug fallback is allowed')
+}
 android {
     namespace 'com.fazaa.customer'
     compileSdk 35
@@ -6,8 +17,26 @@ android {
         applicationId 'com.fazaa.customer.test'
         minSdk 26
         targetSdk 35
-        versionCode 3
-        versionName '0.2.0-test'
+        versionCode requestedCode.toInteger()
+        versionName '0.2.1'
+    }
+    signingConfigs {
+        customerRelease {
+            if (signingFile && signingPassword) {
+                storeFile file(signingFile)
+                storeType 'PKCS12'
+                storePassword signingPassword
+                keyAlias 'fazaa-customer'
+                keyPassword signingPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.customerRelease
+            debuggable false
+            minifyEnabled false
+        }
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
