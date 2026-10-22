@@ -86,7 +86,7 @@ public final class MainActivity extends Activity {
         screen = "dashboard"; lastSnapshot = state; lastBusy = app.busy; lastService = app.service;
         root.removeAllViews();
         label(root, "فزعة — السائق", 27, true);
-        label(root, "نسخة تجربة ٠٫١ · دمشق", 13, false);
+        label(root, "نسخة تجربة ٠٫١٫١ · دمشق", 13, false);
         LinearLayout driver = card();
         label(driver, state.profile.optString("name", "السائق"), 22, true);
         label(driver, "اللوحة: " + state.profile.optString("plate", "—") + " · " + state.profile.optString("area", "دمشق"), 14, false);
@@ -109,6 +109,7 @@ public final class MainActivity extends Activity {
                 if (offer != null) showOffer(offer, state.syncedAt);
             }
         }
+        button(root, "لوحة المدير", this::openAdmin, true);
         button(root, "تسجيل الخروج", () -> confirm("تسجيل الخروج؟", "سيُوقف استقبال الطلبات على هذا الهاتف.", app::logout), !app.busy && state.current == null);
         label(root, "التنبيهات تعتمد على اتصال الإنترنت وتشغيل الاستقبال. الكتم ووضع عدم الإزعاج وإيقاف التطبيق من النظام قد يمنعان التنبيه.", 12, false);
         scroll.post(() -> scroll.scrollTo(0, position));
@@ -131,8 +132,11 @@ public final class MainActivity extends Activity {
             password.setText(""); app.login(address, secret);
         }, true);
         loginMessage = label(form, "", 14, false);
+        button(root, "لوحة المدير", this::openAdmin, true);
         label(root, "جلسة الدخول محفوظة مشفّرة على هذا الهاتف. لا تستخدم حساب المدير هنا.", 13, false);
     }
+
+    private void openAdmin() { startActivity(new Intent(this, AdminActivity.class)); }
 
     private void showOffer(JSONObject offer, long syncedAt) {
         LinearLayout card = card();
