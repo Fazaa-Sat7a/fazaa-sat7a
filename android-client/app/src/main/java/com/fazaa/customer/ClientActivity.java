@@ -62,7 +62,7 @@ public final class ClientActivity extends Activity {
         settings.setSafeBrowsingEnabled(true);
         settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.1");
+        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.1.1");
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         frame.addView(web, new FrameLayout.LayoutParams(-1,-1));
 
@@ -93,7 +93,7 @@ public final class ClientActivity extends Activity {
                 progress.setVisibility(value < 100 ? View.VISIBLE : View.GONE);
             }
             @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-                if (!ORIGIN.equals(origin) || !trustedPage(Uri.parse(web.getUrl() == null ? "" : web.getUrl()))) {
+                if (!LocationOriginPolicy.allows(origin) || !trustedPage(Uri.parse(web.getUrl() == null ? "" : web.getUrl()))) {
                     callback.invoke(origin,false,false); return;
                 }
                 if (locationPermission()) { callback.invoke(origin,true,false); return; }
