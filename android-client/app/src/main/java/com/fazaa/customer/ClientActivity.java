@@ -8,6 +8,13 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.Settings;
+import com.google.firebase.messaging.FirebaseMessaging;
+import java.lang.ref.WeakReference;
+import org.json.JSONObject;
 import android.view.Gravity;
 import android.view.View;
 import android.webkit.CookieManager;
@@ -39,15 +46,35 @@ public final class ClientActivity extends Activity {
     private GeolocationPermissions.Callback locationCallback;
     private String locationOrigin;
     private boolean failed;
+    private LinearLayout notificationBanner;
+    private String notificationRequest;
+    private boolean destroyed;
+    private static WeakReference<ClientActivity> visibleActivity = new WeakReference<>(null);
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        visibleActivity = new WeakReference<>(this);
+        PushStore.createChannel(this);
+        notificationRequest=PushStore.requestId(getIntent().getStringExtra("request_id"));
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.rgb(247,246,242));
         root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         root.addView(progress, new LinearLayout.LayoutParams(-1, dp(3)));
+        notificationBanner = new LinearLayout(this);
+        notificationBanner.setGravity(Gravity.CENTER_VERTICAL);
+        notificationBanner.setPadding(dp(12),dp(3),dp(12),dp(3));
+        notificationBanner.setBackgroundColor(Color.rgb(255,247,219));
+        TextView notificationText = new TextView(this);
+        notificationText.setText("فعّل إشعارات مراحل طلبك"); notificationText.setTextSize(13);
+        notificationBanner.addView(notificationText,new LinearLayout.LayoutParams(0,-2,1));
+        Button notificationButton=new Button(this);
+        notificationButton.setText("تفعيل"); notificationButton.setTextSize(12);
+        notificationButton.setOnClickListener(v -> requestNotifications());
+        notificationBanner.addView(notificationButton,new LinearLayout.LayoutParams(-2,-2));
+        root.addView(notificationBanner,new LinearLayout.LayoutParams(-1,-2));
+        updateNotificationBanner();
         FrameLayout frame = new FrameLayout(this);
         root.addView(frame, new LinearLayout.LayoutParams(-1, 0, 1));
         web = new WebView(this);
@@ -62,7 +89,7 @@ public final class ClientActivity extends Activity {
         settings.setSafeBrowsingEnabled(true);
         settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.1.1");
+        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.2.0");
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         frame.addView(web, new FrameLayout.LayoutParams(-1,-1));
 
@@ -110,7 +137,11 @@ public final class ClientActivity extends Activity {
                 openExternal(request.getUrl()); return true;
             }
             @Override public void onPageFinished(WebView view, String url) {
-                if (!failed && trustedPage(Uri.parse(url))) cover.setVisibility(View.GONE);
+                if (!failed && trustedPage(Uri.parse(url))) {
+                    cover.setVisibility(View.GONE);
+                    publishPushDevice();
+                    deliverNotificationRequest();
+                }
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) showFailure();
@@ -126,6 +157,7 @@ public final class ClientActivity extends Activity {
         });
         root.requestApplyInsets();
         load();
+        refreshPushToken();
     }
 
     private void load() {
@@ -148,12 +180,64 @@ public final class ClientActivity extends Activity {
             && (uri.getPort() == -1 || uri.getPort() == 443) && uri.getUserInfo() == null
             && ("/fazaa-sat7a/".equals(path) || "/fazaa-sat7a/index.html".equals(path));
     }
+    private void updateNotificationBanner() {
+        notificationBanner.setVisibility(PushStore.allowed(this) ? View.GONE : View.VISIBLE);
+    }
+    private void requestNotifications() {
+        if (Build.VERSION.SDK_INT >= 33
+            && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            && (!PushStore.prefs(this).getBoolean("permission_asked",false)
+                || shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS))) {
+            PushStore.prefs(this).edit().putBoolean("permission_asked",true).apply();
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},102);
+        } else {
+            Intent settings=new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+            settings.putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName());
+            startActivity(settings);
+        }
+    }
+    private void refreshPushToken() {
+        FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
+            if(destroyed) return;
+            if(task.isSuccessful() && task.getResult()!=null) {
+                PushStore.prefs(this).edit().putString("token",task.getResult()).apply();
+                publishPushDevice();
+            }
+        });
+    }
+    private boolean isCustomerPage() {
+        return !destroyed && web!=null && trustedPage(Uri.parse(web.getUrl()==null?"":web.getUrl()));
+    }
+    private void publishPushDevice() {
+        if(!isCustomerPage()) return;
+        // One-way data injection, only into the trusted customer page. No JavaScript interface.
+        String device=PushStore.device(this).toString();
+        web.evaluateJavascript("window.FazaaPushDevice="+device+";window.dispatchEvent(new Event('fazaa-push-device'));",null);
+    }
+    private void deliverNotificationRequest() {
+        if(notificationRequest==null || !isCustomerPage()) return;
+        web.evaluateJavascript("window.FazaaPushOpenRequest="+JSONObject.quote(notificationRequest)
+            +";window.dispatchEvent(new Event('fazaa-push-open'));",null);
+        notificationRequest=null;
+    }
+    static void pushTokenChanged() {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            ClientActivity activity=visibleActivity.get();
+            if(activity!=null && !activity.destroyed) activity.publishPushDevice();
+        });
+    }
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent); setIntent(intent);
+        notificationRequest=PushStore.requestId(intent.getStringExtra("request_id"));
+        deliverNotificationRequest();
+    }
     private boolean locationPermission() {
         return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
     @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results) {
         super.onRequestPermissionsResult(code,permissions,results);
+        if(code == 102) { updateNotificationBanner(); publishPushDevice(); }
         if (code == 101 && locationCallback != null) {
             GeolocationPermissions.Callback callback = locationCallback;
             String origin = locationOrigin;
@@ -176,9 +260,15 @@ public final class ClientActivity extends Activity {
         catch (android.content.ActivityNotFoundException e) { Toast.makeText(this,"لا يوجد تطبيق مناسب لفتح الرابط.",Toast.LENGTH_LONG).show(); }
     }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
-    @Override protected void onResume() { super.onResume(); web.onResume(); }
+    @Override protected void onResume() {
+        super.onResume(); visibleActivity = new WeakReference<>(this);
+        web.onResume(); updateNotificationBanner(); publishPushDevice(); refreshPushToken();
+        deliverNotificationRequest();
+    }
     @Override protected void onPause() { web.onPause(); super.onPause(); }
     @Override protected void onDestroy() {
+        destroyed=true;
+        if(visibleActivity.get()==this) visibleActivity.clear();
         clearLocationPrompt(); web.stopLoading(); web.setWebChromeClient(null);
         ((android.view.ViewGroup)web.getParent()).removeView(web); web.destroy(); super.onDestroy();
     }
