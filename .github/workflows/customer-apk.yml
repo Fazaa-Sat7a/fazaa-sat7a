@@ -2,13 +2,16 @@ name: Build Fazaa Customer APK
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - 'android-client/**'
+      - 'ci/customer_signing.py'
       - '.github/workflows/customer-apk.yml'
 permissions:
   contents: read
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -17,6 +20,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Restore and validate fixed customer signing identity
+        env:
+          FAZAA_CUSTOMER_KEYSTORE_BASE64: ${{ secrets.FAZAA_CUSTOMER_KEYSTORE_BASE64 }}
+          FAZAA_KEYSTORE_PASSWORD: ${{ secrets.FAZAA_CUSTOMER_KEYSTORE_PASSWORD }}
+          FAZAA_CUSTOMER_CERT_SHA256: ${{ secrets.FAZAA_CUSTOMER_CERT_SHA256 }}
+        run: python3 ci/customer_signing.py restore "$RUNNER_TEMP/fazaa-customer-signing"
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
@@ -25,13 +34,34 @@ jobs:
           gradle-version: '8.11.1'
       - name: Install Android SDK
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-      - name: Build customer APK
+      - name: Build signed customer release
         working-directory: android-client
-        run: gradle --no-daemon :app:assembleDebug :app:lintDebug
-      - name: Upload customer APK
+        env:
+          FAZAA_KEYSTORE_PASSWORD: ${{ secrets.FAZAA_CUSTOMER_KEYSTORE_PASSWORD }}
+        run: gradle --no-daemon -PfazaaVersionCode=$((1000 + GITHUB_RUN_NUMBER)) :app:assembleRelease :app:lintRelease
+      - name: Verify signed APK identity and package
+        env:
+          FAZAA_CUSTOMER_CERT_SHA256: ${{ secrets.FAZAA_CUSTOMER_CERT_SHA256 }}
+        run: >-
+          python3 ci/customer_signing.py verify-apk
+          android-client/app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$((1000 + GITHUB_RUN_NUMBER))"
+      - name: Prepare APK download
+        run: |
+          mkdir -p "$RUNNER_TEMP/fazaa-customer-apk"
+          cp android-client/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/fazaa-customer-apk/fazaa-customer.apk"
+          cp "$RUNNER_TEMP/fazaa-customer-signing/customer-signing-cert.der" "$RUNNER_TEMP/fazaa-customer-apk/customer-signing-cert.der"
+          cd "$RUNNER_TEMP/fazaa-customer-apk"
+          sha256sum fazaa-customer.apk > SHA256SUMS.txt
+      - name: Upload signed customer APK
         uses: actions/upload-artifact@v4
         with:
-          name: fazaa-customer-test-apk
-          path: android-client/app/build/outputs/apk/debug/app-debug.apk
+          name: fazaa-customer-signed-apk
+          path: ${{ runner.temp }}/fazaa-customer-apk/
           if-no-files-found: error
           retention-days: 30
+      - name: Remove runner-local signing material
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/fazaa-customer-signing"
