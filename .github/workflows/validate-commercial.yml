@@ -37,8 +37,14 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f commercial-tests/07-fares-fleet-ledger.sql
       - name: Verify migration rerun safety
         run: psql -v ON_ERROR_STOP=1 -f commercial-tests/07-fares-fleet-ledger.sql
+      - name: Apply private trial add-on twice
+        run: |
+          psql -v ON_ERROR_STOP=1 -f commercial-tests/08-private-trial.sql
+          psql -v ON_ERROR_STOP=1 -f commercial-tests/08-private-trial.sql
       - name: Exercise roles, pricing, fixed totals, matching, ledger and privacy
         run: psql -v ON_ERROR_STOP=1 -f commercial-tests/commercial-checks.sql
+      - name: Verify private trial gate and public fallback
+        run: psql -v ON_ERROR_STOP=1 -f commercial-tests/private-trial-checks.sql
   browser:
     # Pinned to a platform supported by the selected Playwright release.
     runs-on: ubuntu-22.04
@@ -56,6 +62,7 @@ jobs:
           node commercial-tests/app-flow-checks.cjs
           node commercial-tests/web-flow-checks.cjs
           node commercial-tests/push-binding-checks.cjs
+          node commercial-tests/shell-checks.cjs
       - name: Install Chromium
         working-directory: commercial-tests
         run: npx playwright install --with-deps chromium
