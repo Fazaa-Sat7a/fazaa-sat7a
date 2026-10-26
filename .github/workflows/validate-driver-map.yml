@@ -22,9 +22,10 @@ jobs:
       - name: Test actual display formatting and labels
         run: |
           mkdir -p /tmp/fazaa-driver-display
-          javac -encoding UTF-8 -d /tmp/fazaa-driver-display android/app/src/main/java/com/fazaa/driver/DriverDisplay.java android/app/src/main/java/com/fazaa/driver/OsmAndRoute.java driver-map-tests/DriverDisplayChecks.java driver-map-tests/OsmAndRouteChecks.java
+          javac -encoding UTF-8 -d /tmp/fazaa-driver-display android/app/src/main/java/com/fazaa/driver/DriverDisplay.java android/app/src/main/java/com/fazaa/driver/OsmAndRoute.java driver-map-tests/DriverDisplayChecks.java driver-map-tests/OsmAndRouteChecks.java android/app/src/main/java/com/fazaa/driver/DriverStage.java driver-map-tests/DriverStageChecks.java
           java -cp /tmp/fazaa-driver-display com.fazaa.driver.DriverDisplayChecks
           java -cp /tmp/fazaa-driver-display com.fazaa.driver.OsmAndRouteChecks
+          java -cp /tmp/fazaa-driver-display com.fazaa.driver.DriverStageChecks
   android:
     runs-on: ubuntu-22.04
     timeout-minutes: 25
