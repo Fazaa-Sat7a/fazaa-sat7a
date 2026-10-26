@@ -117,7 +117,7 @@ declare s public.fazaa_fare_settings%rowtype; v public.fazaa_vehicle_models%rowt
  t public.fazaa_truck_classes%rowtype; price public.fazaa_tariffs%rowtype; r public.requests%rowtype;
  zone public.fazaa_fare_zones%rowtype; pickup jsonb; stops jsonb; points jsonb; item jsonb;
  terms jsonb; chosen uuid; region text; yr integer; parent uuid; version integer:=0; ticket uuid;
- enclosed boolean; current_stops jsonb;
+ requested_enclosed boolean; current_stops jsonb;
 begin
  if auth.uid() is null then raise exception 'AUTH_REQUIRED'; end if;
  perform pg_advisory_xact_lock(hashtextextended('fare-quote:'||auth.uid()::text,0));
@@ -137,21 +137,21 @@ begin
   region:=p_input->>'region_code'; pickup:=p_input->'pickup';
   select * into v from public.fazaa_vehicle_models where id=(p_input->>'vehicle_id')::uuid and enabled;
   if not found then raise exception 'VEHICLE_NOT_APPROVED'; end if;
-  enclosed:=coalesce((p_input->>'enclosed')::boolean,false); yr:=nullif(p_input->>'vehicle_year','')::integer;
-  if enclosed and (yr is null or yr not between v.year_from and v.year_to) then raise exception 'VEHICLE_YEAR_REQUIRED'; end if;
+  requested_enclosed:=coalesce((p_input->>'enclosed')::boolean,false); yr:=nullif(p_input->>'vehicle_year','')::integer;
+  if requested_enclosed and (yr is null or yr not between v.year_from and v.year_to) then raise exception 'VEHICLE_YEAR_REQUIRED'; end if;
   if yr is not null and yr not between v.year_from and v.year_to then raise exception 'VEHICLE_YEAR_REQUIRED'; end if;
   select * into zone from public.fazaa_fare_zones where region_code=region and enabled;
   if not found or not public.fazaa_point_ok(pickup) then raise exception 'OUTSIDE_SERVICE_AREA'; end if;
   if (pickup->>'lat')::numeric not between zone.south and zone.north or (pickup->>'lng')::numeric not between zone.west and zone.east then raise exception 'OUTSIDE_SERVICE_AREA'; end if;
   if not exists(select 1 from public.customer_service_coverage c join public.customer_regions cr on cr.code=c.region_code where c.region_code=region and c.service_code='tow' and c.enabled and cr.enabled) then raise exception 'OUTSIDE_SERVICE_AREA'; end if;
   select c.* into t from public.fazaa_truck_classes c join public.fazaa_tariffs p on p.truck_class_id=c.id and p.region_code=region and p.enabled
-   where c.enabled and c.enclosed=enclosed and c.length_m>=v.length_m and c.width_m>=v.width_m and c.capacity_kg>=v.weight_kg and (not enclosed or c.height_m>=v.height_m)
+   where c.enabled and c.enclosed=requested_enclosed and c.length_m>=v.length_m and c.width_m>=v.width_m and c.capacity_kg>=v.weight_kg and (not requested_enclosed or c.height_m>=v.height_m)
    and exists(select 1 from public.fazaa_driver_fleet f join public.drivers d on d.id=f.driver_id where f.truck_class_id=c.id and f.region_code=region and d.status='active')
    order by c.length_m*c.width_m,c.capacity_kg,c.id limit 1;
   if not found then raise exception 'NO_MATCHING_TRUCK'; end if;
   chosen:=t.id;
   select * into price from public.fazaa_tariffs where region_code=region and truck_class_id=chosen and enabled;
-  terms:=to_jsonb(price)-'id'-'enabled'||jsonb_build_object('commission_pct',s.commission_pct,'currency_label',s.currency_label,'truck_name',t.name,'vehicle_name',v.make||' '||v.model,'enclosed',enclosed);
+  terms:=to_jsonb(price)-'id'-'enabled'||jsonb_build_object('commission_pct',s.commission_pct,'currency_label',s.currency_label,'truck_name',t.name,'vehicle_name',v.make||' '||v.model,'enclosed',requested_enclosed);
  end if;
  stops:=p_input->'stops';
  if not public.fazaa_point_ok(pickup) or jsonb_typeof(stops)<>'array' or jsonb_array_length(stops) not between 1 and 4 then raise exception 'INVALID_STOPS'; end if;

@@ -1,3 +1,4 @@
+require('node:child_process').execFileSync(process.execPath,[require('node:path').join(__dirname,'commercial-startup-checks.cjs')],{stdio:'inherit'});
 const {chromium}=require('playwright');
 const fs=require('node:fs'),http=require('node:http'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'fixture-web');
@@ -36,8 +37,9 @@ const mock=`(()=>{
 (async()=>{
  const server=http.createServer((req,res)=>{let file=path.join(root,decodeURIComponent(req.url.split('?')[0]));if(req.url.split('?')[0]==='/')file=path.join(root,'index.html');if(!file.startsWith(root)||!fs.existsSync(file)){res.writeHead(404);return res.end();}res.setHeader('content-type',file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':file.endsWith('.png')?'image/png':'text/html');res.end(fs.readFileSync(file));});await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const browser=await chromium.launch({headless:true,args:['--no-sandbox']}).catch(e=>{server.close();throw e;});
+ let page;
  try{
- const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error('BROWSER SCRIPT ERROR:',e.stack||e.message);});
  await page.addInitScript(mock);
  await page.route('https://**/*',async route=>{const url=route.request().url();if(url.includes('/functions/v1/fare-quote')){if(route.request().method()==='OPTIONS'){await route.fulfill({status:204,headers:{'access-control-allow-origin':'*','access-control-allow-headers':'authorization,apikey,content-type','access-control-allow-methods':'POST, OPTIONS'}});return;}const input=route.request().postDataJSON();await route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify({quote_id:ids.quote,total:input.request_id?40:210,currency_label:'ل.س — اختبار',truck_name:'سطحة عادية اختبار',distance_km:3.2,minutes:10,expires_at:new Date(Date.now()+600000).toISOString(),is_extension:!!input.request_id})});}else if(url.includes('supabase-js'))await route.fulfill({contentType:'application/javascript',body:''});else if(url.endsWith('.js'))await route.fulfill({contentType:'application/javascript',body:''});else await route.abort();});
  const base='http://127.0.0.1:'+server.address().port;
@@ -60,5 +62,14 @@ const mock=`(()=>{
  await page.screenshot({path:path.join(__dirname,'screenshots/customer-invoice.png'),fullPage:true});
  await page.setViewportSize({width:1280,height:900});await page.goto(base+'/admin.html');await page.waitForSelector('#dashboard:visible');await page.getByRole('button',{name:'التعرفة والأسطول والعمولات'}).click();await page.waitForSelector('#fare-admin-settings-commission_pct');assert.equal(await page.inputValue('#fare-admin-settings-commission_pct'),'0');assert.equal(await page.locator('#fare-admin-settings-enabled').isChecked(),false);await page.screenshot({path:path.join(__dirname,'screenshots/admin-commercial.png'),fullPage:true});
  assert.deepEqual(errors,[]);console.log('PASS: real browser mobile booking, VIP year required, account/history merged, stale quote blocked, fixed fare booking, approved extension, private rating, admin zero commission defaults and no mobile overflow');
+ }catch(error){
+  if(page){
+   try{
+    console.error('BROWSER FAILURE STATE:',JSON.stringify(await page.evaluate(()=>({url:location.href,modelOptions:document.querySelector('#vehicle-model')?.options.length,lastCalls:window.__calls?.slice(-8),notice:document.querySelector('#global-message')?.textContent})),null,2));
+    fs.mkdirSync(path.join(__dirname,'screenshots'),{recursive:true});
+    await page.screenshot({path:path.join(__dirname,'screenshots/failure.png'),fullPage:true});
+   }catch(diagnostic){console.error('Diagnostic failed:',diagnostic.message);}
+  }
+  throw error;
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});
