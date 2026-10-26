@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict');
+const {parse,columns}=require('./fixture-web/assets/vehicle-csv.js');
+const header=columns.join(',');
+const row='Test,Sedan,small,4.5,1.8,1.5,1400,2010,2025,fixture-only,false';
+const input=header+'\n'+row;
+assert.equal(parse(input)[0].enabled,false);
+assert.equal(parse('\uFEFF'+input.replace(/\n/g,'\r\n'))[0].length_m,4.5);
+assert.equal(parse(header+'\n'+row.replace('Test','"Test, brand"'))[0].make,'Test, brand');
+assert.equal(parse(header+'\n'+row.replace('fixture-only','"test\nsource"'))[0].source,'test\nsource');
+assert.equal(parse(header+'\n'+row.replace('Test','"Test ""brand"""'))[0].make,'Test "brand"');
+for(const value of [header,input.replace('1400',''),input.replace('fixture-only',''),input.replace(',4.5,',',-4.5,'),input.replace('2025','1900'),input.replace('false','yes'),input.replace('small','unknown'),input.replace('make,','bad,'),header+'\n"unterminated',header+'\n'+Array(501).fill(row).join('\n')]) assert.throws(()=>parse(value));
+assert.equal(parse(header+'\n'+row.replace('false','TRUE'))[0].enabled,true);
+console.log('PASS: CSV quoting, Arabic-compatible text, numeric dimensions, sources, years, flags and limits');

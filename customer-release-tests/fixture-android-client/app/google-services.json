@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "82916946264",
+    "project_id": "fazaa-9f44f",
+    "storage_bucket": "fazaa-9f44f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:82916946264:android:4b5df463a6edd081ccf52d",
+        "android_client_info": {
+          "package_name": "com.fazaa.customer.test"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBM5p0V0BdPyJBV5vAbTJTNWKGnNw01ahg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
