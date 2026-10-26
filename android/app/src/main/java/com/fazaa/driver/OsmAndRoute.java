@@ -12,6 +12,6 @@ final class OsmAndRoute {
 
     static String link(double fromLat,double fromLng,double toLat,double toLng){
         if(!valid(fromLat,fromLng)||!valid(toLat,toLng))throw new IllegalArgumentException("Invalid map coordinates");
-        return String.format(Locale.ROOT,"https://osmand.net/map/?start=%.7f,%.7f&finish=%.7f,%.7f&profile=car",fromLat,fromLng,toLat,toLng);
+        return String.format(Locale.ROOT,"osmand.api://navigate?start_lat=%.7f&start_lon=%.7f&dest_lat=%.7f&dest_lon=%.7f&profile=car&force=false&location_permission=true",fromLat,fromLng,toLat,toLng);
     }
 }

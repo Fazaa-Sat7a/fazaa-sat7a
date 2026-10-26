@@ -9,7 +9,6 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.location.Location;
 import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
@@ -82,11 +81,14 @@ public final class MainActivity extends Activity {
             return;
         }
         if (screen.equals("dashboard") && lastSnapshot == state && lastBusy == app.busy && lastService == app.service) return;
-        int position = scroll.getScrollY();
+        String priorTrip=lastSnapshot==null||lastSnapshot.current==null?"":lastSnapshot.current.optString("id")+":"+lastSnapshot.current.optString("status");
+        String nextTrip=state.current==null?"":state.current.optString("id")+":"+state.current.optString("status");
+        int position=priorTrip.equals(nextTrip)?scroll.getScrollY():0;
         screen = "dashboard"; lastSnapshot = state; lastBusy = app.busy; lastService = app.service;
         root.removeAllViews();
         label(root, "فزعة — السائق", 27, true);
         label(root, "فزعة · التسعير الثابت وعمولة الإطلاق", 13, false);
+        if(state.current==null){
         LinearLayout driver = card();
         label(driver, state.profile.optString("name", "السائق"), 22, true);
         label(driver, "اللوحة: " + state.profile.optString("plate", "—") + " · " + state.profile.optString("area", "دمشق"), 14, false);
@@ -105,9 +107,13 @@ public final class MainActivity extends Activity {
         button(driver, toggle, () -> { if (state.available) app.stopReceiving(); else startReceiving(); }, activeAccount && !app.busy);
         label(driver, "عند تشغيل الاستقبال، يستمر تحديث الموقع أثناء استخدام تطبيق آخر أو إطفاء الشاشة، مع إشعار ظاهر. أوقف الاستقبال عند انتهاء دوامك.", 13, false);
         if (app.service != null && !state.available && state.current == null) button(driver, "إيقاف التشغيل", app::stopReceiving, !app.busy);
-        button(driver, "الخريطة", () -> openMap(state.current), true);
         button(driver, "تحديث الحالة", app::refresh, !app.busy);
         if (!getSystemService(NotificationManager.class).areNotificationsEnabled()) button(driver, "تفعيل إشعارات الطلبات", this::notificationSettings, true);
+        }else{
+            label(root,state.message,13,false);
+            if(app.service==null)button(root,"استئناف تتبع الموقع",this::startReceiving,!app.busy);
+            if(!getSystemService(NotificationManager.class).areNotificationsEnabled())button(root,"تفعيل إشعارات الطلبات",this::notificationSettings,true);
+        }
         if (state.current != null) showCurrent(state.current);
         else {
             label(root, "الطلبات القريبة · ضمن ١٥ كم", 22, true);
@@ -117,9 +123,10 @@ public final class MainActivity extends Activity {
                 if (offer != null) showOffer(offer, state.syncedAt);
             }
         }
-        button(root, "لوحة المدير", this::openAdmin, true);
+        if(state.current==null){
         button(root, "تسجيل الخروج", () -> confirm("تسجيل الخروج؟", "سيُوقف استقبال الطلبات على هذا الهاتف.", app::logout), !app.busy && state.current == null);
         label(root, "التنبيهات تعتمد على اتصال الإنترنت وتشغيل الاستقبال. الكتم ووضع عدم الإزعاج وإيقاف التطبيق من النظام قد يمنعان التنبيه.", 12, false);
+        }else button(root,"تحديث الحالة",app::refresh,!app.busy);
         scroll.post(() -> scroll.scrollTo(0, position));
     }
 
@@ -254,13 +261,6 @@ public final class MainActivity extends Activity {
     }
 
     private void notificationSettings() { external(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName())); }
-    private void openMap(JSONObject request) {
-        Intent intent = new Intent(this, MapActivity.class);
-        if (request != null && !request.isNull("lat") && !request.isNull("lng")) intent.putExtra("lat", request.optDouble("lat")).putExtra("lng", request.optDouble("lng"));
-        Location own = app.location;
-        if (own != null) intent.putExtra("ownLat", own.getLatitude()).putExtra("ownLng", own.getLongitude());
-        startActivity(intent);
-    }
     private void openRoute(JSONObject request, int stopIndex, String title) {
         String id = DriverDisplay.text(request.opt("id"), "");
         if (id.isEmpty()) { toast("تعذّر تحديد الطلب. حدّث الحالة وحاول مجدداً."); return; }
