@@ -122,4 +122,4 @@ $('new-request').addEventListener('click',()=>{requestMap.clear();lastMapRequest
 pickupMap.update([]);
 
 try{if(!window.supabase)throw new Error('لم تتحمّل مكتبة الاتصال. تأكّد من اتصالك بالإنترنت وأعد فتح الصفحة.');client=window.supabase.createClient(PROJECT_URL,PUBLIC_KEY,{auth:{storageKey:'fazaa-customer-auth-v0',persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});requestId=localStorage.getItem(ACTIVE_KEY);if(requestId){showTracking();$('tracking-title').textContent='جاري استعادة طلبك…';refresh();}}catch(e){message(errorText(e),'error');$('submit').disabled=true;}
-</script><script src="assets/customer-app.js"></script><script src="assets/customer-push.js"></script></body></html>
+</script><script src="assets/customer-shell.js"></script></body></html>
