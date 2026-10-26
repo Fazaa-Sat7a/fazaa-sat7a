@@ -24,7 +24,7 @@
     const current=await client.auth.getSession();
     if(current.data.session?.user.id!==session.user.id){dirty=true;continue;}
     lastBinding=key;
-    status(d.permission?'إشعارات الطلب مسموحة، وهذا الجهاز مرتبط بحسابك.':'الإشعارات غير مسموحة. استخدم زر «تفعيل» أعلى التطبيق لتشغيلها.');
+    status(d.permission?'إشعارات الطلب مسموحة، وهذا الجهاز مرتبط بحسابك.':'الإشعارات غير مسموحة. افتح «إعدادات إشعارات الطلب» من حسابي لتشغيلها.');
    }while(dirty&&!signingOut);
   })();
   try{await syncing;}catch(e){lastBinding='';status('تعذّر ربط إشعارات الجهاز. افتح التطبيق عند عودة الإنترنت للمحاولة مجدداً.');schedule(30000);throw e;}
