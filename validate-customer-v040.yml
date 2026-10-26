@@ -1,0 +1,96 @@
+name: Validate Fazaa Customer 0.4.0
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fazaa_commercial_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGDATABASE: fazaa_commercial_test
+      PGUSER: postgres
+      PGPASSWORD: test-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Create disposable fixture
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/base-fixture.sql
+      - name: Apply prior customer migrations
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/prior-migrations.sql
+      - name: Apply commercial migration
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/07-fares-fleet-ledger.sql
+      - name: Verify migration rerun safety
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/07-fares-fleet-ledger.sql
+      - name: Apply private trial add-on twice
+        run: |
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/08-private-trial.sql
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/08-private-trial.sql
+      - name: Exercise roles, pricing, fixed totals, matching, ledger and privacy
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/commercial-checks.sql
+      - name: Verify private trial gate and public fallback
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/private-trial-checks.sql
+      - name: Apply vehicle catalog add-on twice
+        run: |
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/09-vehicle-suggestions.sql
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/09-vehicle-suggestions.sql
+      - name: Verify suggestions and atomic imports
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/vehicle-checks.sql
+  browser:
+    # Pinned to a platform supported by the selected Playwright release.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test runner
+        working-directory: customer-release-tests
+        run: npm install --no-save --ignore-scripts playwright@1.51.1
+      - name: Validate CSV import parser
+        run: node customer-release-tests/csv-checks.cjs
+      - name: Install Chromium
+        working-directory: customer-release-tests
+        run: npx playwright install --with-deps chromium
+      - name: Exercise the actual HTML with mocked network services
+        run: node customer-release-tests/ui-checks.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: customer-v040-ui-test-screenshots
+          path: customer-release-tests/screenshots/
+          if-no-files-found: ignore
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Compile and lint the isolated app fixture
+        working-directory: customer-release-tests/fixture-android-client
+        run: gradle --no-daemon :app:assembleDebug :app:lintDebug
