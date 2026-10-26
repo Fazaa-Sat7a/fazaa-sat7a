@@ -86,10 +86,18 @@ public final class MainActivity extends Activity {
         screen = "dashboard"; lastSnapshot = state; lastBusy = app.busy; lastService = app.service;
         root.removeAllViews();
         label(root, "فزعة — السائق", 27, true);
-        label(root, "نسخة تجربة ٠٫١٫١ · دمشق", 13, false);
+        label(root, "فزعة · التسعير الثابت وعمولة الإطلاق", 13, false);
         LinearLayout driver = card();
         label(driver, state.profile.optString("name", "السائق"), 22, true);
         label(driver, "اللوحة: " + state.profile.optString("plate", "—") + " · " + state.profile.optString("area", "دمشق"), 14, false);
+        JSONObject finance=state.profile.optJSONObject("_fazaa_finances");
+        if(finance!=null){
+            label(driver,finance.optDouble("commission_pct",0)==0?"عمولة فزعة FREE خلال فترة الإطلاق":"عمولة الطلبات الجديدة: "+finance.optString("commission_pct")+"%",16,true);
+            label(driver,"المستحق لفزعة: "+finance.optString("balance","0")+" "+finance.optString("currency_label",""),14,false);
+            JSONObject rating=finance.optJSONObject("rating");
+            label(driver,rating!=null&&rating.optInt("count")>0?"★ "+rating.optString("average")+" / 5 · "+rating.optInt("count")+" تقييم":"جديد — لم تسجل تقييمات بعد",15,true);
+            button(driver,"كشف العمولات والتسديدات",()->showLedger(finance),true);
+        }
         boolean activeAccount = "active".equals(state.profile.optString("status"));
         label(driver, !activeAccount ? "الحساب موقوف" : state.available ? (state.current == null ? "متاح لاستقبال الطلبات" : "مشغول بخدمة") : "غير متاح لطلبات جديدة", 17, true);
         label(driver, state.message, 14, false);
@@ -144,8 +152,9 @@ public final class MainActivity extends Activity {
         label(card, String.format(Locale.ROOT, "المسافة المباشرة: %.1f كم", offer.optDouble("distance_km", 0)), 15, false);
         label(card, "وقت الطلب: " + offer.optString("created_at", "—"), 13, false);
         if (!offer.optString("note").isEmpty()) label(card, offer.optString("note"), 15, false);
+        fareDetails(card,offer);
         button(card, "عرض موقع العميل", () -> openMap(offer), true);
-        button(card, "قبول الطلب", () -> app.accept(offer.optString("id")), !app.busy && app.service != null && System.currentTimeMillis() - syncedAt < 30000);
+        button(card, "قبول الطلب", () -> app.accept(offer.optString("id")), !app.busy && app.service != null && offer.optJSONObject("_fazaa")!=null && System.currentTimeMillis() - syncedAt < 30000);
     }
 
     private void showCurrent(JSONObject request) {
@@ -156,15 +165,41 @@ public final class MainActivity extends Activity {
         label(card, problem(request.optString("problem")) + " · " + car(request.optString("car_type")), 16, false);
         label(card, "مرجع الطلب: " + id.substring(0, Math.min(8, id.length())), 13, false);
         if (!request.optString("note").isEmpty()) label(card, request.optString("note"), 15, false);
+        fareDetails(card,request);
         button(card, "موقع العميل على الخريطة", () -> openMap(request), true);
         button(card, "فتح الملاحة", () -> navigate(request), true);
         String phone = request.optString("customer_phone", "").replaceAll("[^0-9+]", "");
         if (!phone.isEmpty()) button(card, "اتصال بالعميل", () -> external(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phone))), true);
         if (status.equals("accepted")) button(card, "وصلت للعميل", () -> app.changeStatus(id, "arrived"), !app.busy);
         if (status.equals("arrived")) button(card, "بدأت نقل السيارة", () -> app.changeStatus(id, "in_progress"), !app.busy);
-        if (status.equals("arrived") || status.equals("in_progress")) button(card, "أنهيت الخدمة", () -> confirm("إنهاء الخدمة؟", "تأكّد من اكتمال نقل السيارة قبل الإنهاء.", () -> app.changeStatus(id, "done")), !app.busy);
+        if (status.equals("arrived") || status.equals("in_progress")) button(card, "أنهيت الخدمة", () -> confirm("إنهاء الخدمة؟", "تأكّد من اكتمال الخدمة وتسوية الأجرة الكاش المتفق عليها مع العميل قبل الإنهاء.", () -> app.changeStatus(id, "done")), !app.busy);
         button(card, "إلغاء الطلب", () -> confirm("إلغاء الطلب الحالي؟", "أخبر العميل قبل الإلغاء.", () -> app.changeStatus(id, "cancelled_driver")), !app.busy);
-        label(card, "السعر يُتفق عليه مع العميل قبل الخدمة.", 13, false);
+        label(card, request.optJSONObject("_fazaa")!=null&&request.optJSONObject("_fazaa").optBoolean("priced")?"السعر مثبت؛ لا تضف مبلغاً خارج موافقة العميل في التطبيق.":"طلب قديم سابق لتفعيل التسعير الثابت.", 13, false);
+    }
+
+    private void fareDetails(LinearLayout card,JSONObject request){
+        JSONObject fare=request.optJSONObject("_fazaa");
+        if(fare==null){label(card,"بيانات الأجرة غير متاحة. حدّث الحالة قبل قبول الطلب.",14,true);return;}
+        if(!fare.optBoolean("priced")){label(card,"طلب سابق لنظام التسعير الثابت.",14,false);return;}
+        String currency=fare.optString("currency_label","");
+        label(card,"الأجرة الشاملة: "+fare.optString("total")+" "+currency,22,true);
+        label(card,fare.optString("vehicle_name")+" · "+fare.optString("truck_name"),15,false);
+        double pct=fare.optDouble("commission_pct",0),total=fare.optDouble("total",0),commission=fare.optDouble("commission",0);
+        label(card,pct==0?"عمولة فزعة FREE — كامل الأجرة إلك":"عمولة فزعة: "+commission+" · صافي مستحقك: "+(total-commission)+" "+currency,15,true);
+        org.json.JSONArray stops=fare.optJSONArray("stops");
+        if(stops!=null)for(int i=0;i<stops.length();i++){
+            JSONObject stop=stops.optJSONObject(i);if(stop==null)continue;
+            label(card,(i+1)+". "+stop.optString("label","الوجهة"),15,true);
+            Uri target=Uri.parse("https://www.google.com/maps/dir/?api=1&destination="+stop.optDouble("lat")+","+stop.optDouble("lng"));
+            button(card,"ملاحة إلى الوجهة "+(i+1),()->external(new Intent(Intent.ACTION_VIEW,target)),true);
+        }
+    }
+    private void showLedger(JSONObject finance){
+        StringBuilder text=new StringBuilder();org.json.JSONArray entries=finance.optJSONArray("ledger");
+        if(entries!=null)for(int i=0;i<entries.length();i++){
+            JSONObject e=entries.optJSONObject(i);if(e!=null)text.append(e.optString("created_at")).append("\n").append("commission".equals(e.optString("kind"))?"عمولة رحلة: ":"تسديد: ").append(e.optString("amount")).append(" ").append(finance.optString("currency_label")).append("\n\n");
+        }
+        new AlertDialog.Builder(this).setTitle("كشف حساب فزعة").setMessage(text.length()>0?text.toString():"لا توجد حركات مالية بعد.").setPositiveButton("إغلاق",null).show();
     }
 
     private boolean locationPermission() {

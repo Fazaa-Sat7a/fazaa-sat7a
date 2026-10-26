@@ -30,6 +30,8 @@ public final class DriverApp extends Application {
     private final Set<String> notified = new HashSet<>();
     private JSONObject profile, current;
     private boolean available;
+    private JSONObject finances;
+    private long financesAt;
     interface Task { void run() throws Exception; }
 
     static final class Snapshot {
@@ -121,6 +123,19 @@ public final class DriverApp extends Application {
             if (running != null && available && fresh && current == null) {
                 offers = (JSONArray) api.rpc("driver_open_requests", Api.object("p_radius_km", 15));
             }
+            // Fare data is authorized separately, without altering the existing GPS worker.
+            JSONArray ids = new JSONArray();
+            if (current != null) ids.put(current.optString("id"));
+            for (int i=0; i<offers.length(); i++) ids.put(offers.getJSONObject(i).optString("id"));
+            if (ids.length()>0) {
+                JSONObject cards=(JSONObject)api.rpc("get_fazaa_driver_cards",Api.object("p_ids",ids));
+                if(current!=null) current.put("_fazaa",cards.optJSONObject(current.optString("id")));
+                for(int i=0;i<offers.length();i++){JSONObject offer=offers.getJSONObject(i);offer.put("_fazaa",cards.optJSONObject(offer.optString("id")));}
+            }
+            if(finances==null || System.currentTimeMillis()-financesAt>30000){
+                finances=(JSONObject)api.rpc("get_fazaa_driver_finances",new JSONObject());financesAt=System.currentTimeMillis();
+            }
+            profile.put("_fazaa_finances",finances);
             if (running != null) running.notifyOffers(offers, notified);
             String state = pendingOnline ? "جاري تحديد موقعك قبل تفعيل الاستقبال…" : running == null ? (current != null ? "لديك خدمة نشطة. اضغط «استئناف التتبع»." : "الاستقبال متوقف.") : !fresh ? "ننتظر إشارة GPS حديثة. الاستقبال الجديد متوقف." : "آخر تحديث: " + java.text.DateFormat.getTimeInstance().format(new java.util.Date()) + " · دقة الموقع نحو " + Math.round(point.getAccuracy()) + " متر";
             snapshot = new Snapshot(profile, current, offers, available, state, System.currentTimeMillis());
@@ -189,7 +204,7 @@ public final class DriverApp extends Application {
             if (first(api.rpc("driver_current_request", new JSONObject())) != null) throw new Exception("أكمل الطلب الحالي أو ألغِه قبل تسجيل الخروج.");
             api.rpc("driver_set_available", Api.object("p_available", false));
             pendingOnline = false; available = false; stopServiceNow();
-            api.clear(); profile = null; current = null; notified.clear(); needsReconcile = true;
+            api.clear(); finances=null; financesAt=0; profile = null; current = null; notified.clear(); needsReconcile = true;
             snapshot = new Snapshot(null, null, new JSONArray(), false, "تم تسجيل الخروج.", 0);
         });
     }
