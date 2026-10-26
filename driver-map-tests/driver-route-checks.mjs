@@ -15,18 +15,19 @@ function fixture(opts={}){
   if(url.includes('/rest/v1/drivers?'))return Response.json(opts.noDriver?[]:[{id:uid,status:opts.inactive?'suspended':'active',lat:33.5,lng:36.3,location_updated_at:new Date(clock-(opts.stale?100000:1000)).toISOString()}]);
   if(url.endsWith('/driver_current_request'))return Response.json(opts.offer||revoked?[]:[{id:rid,status:'accepted',...pickup}]);
   if(url.endsWith('/driver_open_requests'))return Response.json(opts.forbidden||revoked?[]:[{id:rid,...pickup}]);
-  if(url.endsWith('/get_fazaa_driver_cards'))return Response.json({[rid]:{stops:opts.noStop?[]:[stop]}});
+  if(url.endsWith('/get_fazaa_driver_cards'))return Response.json({[rid]:{stops:opts.noStop?[]:(opts.stops||[stop])}});
   if(url==='https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson'){
    const body=JSON.parse(options.body);assert.equal(options.headers.authorization,'ORS_SECRET');
-   assert.deepEqual(body.coordinates,[[36.3,33.5],opts.targetStop?[36.32,33.52]:[36.31,33.51]]);
-   assert.deepEqual(body.radiuses,[300,300]);assert.equal(body.geometry,true);assert.equal(body.units,'m');
+   const expected=opts.preview?[[36.3,33.5],[36.31,33.51],...(opts.noStop?[]:(opts.stops||[stop])).map(p=>[p.lng,p.lat])]:[[36.3,33.5],opts.targetStop?[36.32,33.52]:[36.31,33.51]];
+   assert.deepEqual(body.coordinates,expected);
+   assert.deepEqual(body.radiuses,body.coordinates.map(()=>300));assert.equal(body.geometry,true);assert.equal(body.units,'m');
    if(opts.throwRouter)throw Error('ORS_SECRET');
    return Response.json(opts.route||route,{status:opts.routerStatus||200});
   }
   throw Error('Unexpected network '+url);
  };
  const handler=createDriverRoute({env:k=>config[k],fetchImpl,now:()=>clock});
- const invoke=(input={},headers={})=>handler(new Request('https://edge.example/driver-route',{method:'POST',headers:{authorization:'Bearer '+token,...headers},body:JSON.stringify({request_id:rid,stop_index:opts.targetStop?0:-1,origin:{lat:0,lng:0},destination:{lat:0,lng:0},total:1,...input})}));
+ const invoke=(input={},headers={})=>handler(new Request('https://edge.example/driver-route',{method:'POST',headers:{authorization:'Bearer '+token,...headers},body:JSON.stringify({request_id:rid,stop_index:opts.preview?-2:opts.targetStop?0:-1,origin:{lat:0,lng:0},destination:{lat:0,lng:0},total:1,...input})}));
  return {handler,calls,invoke,advance:()=>{clock+=5000;},revoke:()=>{revoked=true;}};
 }
 try{
@@ -34,6 +35,9 @@ try{
  assert(!f.calls.some(c=>/finish_fazaa_quote|create_fazaa|set_status/.test(c.url)),'route lookup must not mutate fare or trip');
  f=fixture({targetStop:true});assert.equal((await f.invoke()).status,200);
  f=fixture({offer:true});assert.equal((await f.invoke()).status,200);
+ f=fixture({offer:true,preview:true,stops:[stop,{lat:33.53,lng:36.33,label:'وجهة ثانية'}]});r=await f.invoke();assert.equal(r.status,200);let overview=await r.json();assert.equal(overview.targets.length,3);assert.equal(overview.targets[0].label,'موقع العميل');assert.equal(overview.targets[1].number,1);assert.equal(overview.targets[2].number,2);assert.equal(overview.target.label,'وجهة ثانية');
+ f=fixture({offer:true,preview:true,noStop:true});r=await f.invoke();assert.equal(r.status,200);assert.equal((await r.json()).targets.length,1,'legacy request without stops shows pickup only');
+
  for(const [opts,status] of [[{auth:false},401],[{missing:true},503],[{noDriver:true},403],[{inactive:true},403],[{stale:true},409],[{offer:true,forbidden:true},403],[{targetStop:true,noStop:true},400],[{routerStatus:429},503],[{routerStatus:403},503],[{throwRouter:true},503],[{route:{features:[]}},422],[{route:{features:[{geometry:{type:'LineString',coordinates:[[36,95],[36,33]]},properties:{summary:{distance:1,duration:1}}}]}},422]]){
   f=fixture(opts);r=await f.invoke();assert.equal(r.status,status,JSON.stringify(opts));assert(!/ORS_SECRET|USER_/.test(await r.text()));
   if([401,403,409,400].includes(status))assert(!f.calls.some(c=>c.url.includes('api.heigit.org')));
@@ -46,5 +50,5 @@ try{
  f.revoke();assert.equal((await f.invoke()).status,403,'revoked request access must invalidate a cached route');
  f=fixture();assert.equal((await f.invoke()).status,200);assert.equal((await f.invoke({stop_index:0})).status,429,'rapid cache miss is limited per instance');
  assert(logs.every(s=>!s.includes('ORS_SECRET')&&!s.includes(token)));
- console.log('PASS: authenticated active drivers, authorized active/offered trips, server-selected origin/destination, stale GPS rejection, read-only route, geometry validation, current HeiGIT API, private key, bounded cache and authorization recheck, local throttling, provider failures and CORS.');
+ console.log('PASS: ordered full-trip preview before acceptance and legacy pickup-only fallback; authenticated active drivers, authorized active/offered trips, server-selected origin/destination, stale GPS rejection, read-only route, geometry validation, current HeiGIT API, private key, bounded cache and authorization recheck, local throttling, provider failures and CORS.');
 }finally{console.warn=warn;}

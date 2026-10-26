@@ -24,5 +24,7 @@ assert.equal(maps[0].bounds.points.length,5,'fit includes route bends and both m
 c.window.setMapState({points:[{lat:33.501,lng:36.301,driver:true,stale:true}],route});assert(pins.at(-1).el.className.includes('stale'));
 c.window.setMapState({points,route:null});assert.equal(maps[0].sources['trip-route'].data.features.length,0,'failed/refreshed route clears previous geometry');
 c.window.setMapState({points:[{lat:100,lng:0}],route:{calculated_at:'bad',geometry:{type:'LineString',coordinates:[[0,95],[1,1]]}}});assert.equal(maps[0].sources['trip-route'].data.features.length,0);assert(pins.every(p=>p.removed));
+c.window.setMapState({points:[{lat:33.5,lng:36.3,driver:true},{lat:33.51,lng:36.31,preview:true,delivery:false,label:'العميل'},{lat:33.52,lng:36.32,preview:true,delivery:true,number:1,label:'كراج أول'},{lat:33.53,lng:36.33,preview:true,delivery:true,number:2,label:'كراج ثان'}],route});
+const active=pins.filter(p=>!p.removed);assert.equal(active.length,4);assert.equal(active[1].el.textContent,'ع');assert.equal(active[2].el.textContent,'1');assert.equal(active[3].el.textContent,'2');assert(active[2].el.className.includes('delivery'));assert(active[3].el.className.includes('delivery'));
 assert(html.includes('openrouteservice.org'));assert(html.includes('openstreetmap.org/copyright'));
 console.log('PASS: actual map JS queues geometry until load, draws provider line, includes bends in bounds, updates GPS pins, marks stale GPS, clears missing/invalid routes and renders labels as text.');

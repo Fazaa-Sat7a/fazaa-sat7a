@@ -154,8 +154,9 @@ public final class MainActivity extends Activity {
         String note = DriverDisplay.text(offer.opt("note"), "");
         if (!note.isEmpty()) label(card, note, 15, false);
         fareDetails(card,offer);
-        button(card, "عرض موقع العميل", () -> openMap(offer), true);
-        button(card, "قبول الطلب", () -> app.accept(offer.optString("id")), !app.busy && app.service != null && offer.optJSONObject("_fazaa")!=null && System.currentTimeMillis() - syncedAt < 30000);
+        button(card, "عرض الرحلة", () -> openTrip(offer), true);
+        Button acceptButton=button(card, "قبول الطلب", () -> app.accept(offer.optString("id")), !app.busy && app.service != null && offer.optJSONObject("_fazaa")!=null && System.currentTimeMillis() - syncedAt < 30000);
+        acceptButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(21,128,61)));acceptButton.setTextColor(Color.WHITE);
     }
 
     private void showCurrent(JSONObject request) {
@@ -168,8 +169,8 @@ public final class MainActivity extends Activity {
         String note = DriverDisplay.text(request.opt("note"), "");
         if (!note.isEmpty()) label(card, note, 15, false);
         fareDetails(card,request);
-        button(card, "موقع العميل على الخريطة", () -> openMap(request), true);
         button(card, "المسار إلى العميل", () -> openRoute(request, -1, "المسار إلى العميل"), true);
+        deliveryRoutes(card,request);
         String phone = request.optString("customer_phone", "").replaceAll("[^0-9+]", "");
         if (!phone.isEmpty()) button(card, "اتصال بالعميل", () -> external(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phone))), true);
         if (status.equals("accepted")) button(card, "وصلت للعميل", () -> app.changeStatus(id, "arrived"), !app.busy);
@@ -192,11 +193,20 @@ public final class MainActivity extends Activity {
         if(stops!=null)for(int i=0;i<stops.length();i++){
             JSONObject stop=stops.optJSONObject(i);if(stop==null)continue;
             label(card,(i+1)+". "+stop.optString("label","الوجهة"),15,true);
-            final int stopIndex=i;
-            String routeTitle=DriverDisplay.deliveryButton(i,stops.length());
-            button(card,routeTitle,()->openRoute(request,stopIndex,routeTitle),true);
         }
     }
+    private void deliveryRoutes(LinearLayout card,JSONObject request){
+        JSONObject fare=request.optJSONObject("_fazaa");
+        org.json.JSONArray stops=fare==null?null:fare.optJSONArray("stops");
+        if(stops==null)return;
+        for(int i=0;i<stops.length();i++){
+            if(stops.optJSONObject(i)==null)continue;
+            final int stopIndex=i;String title=DriverDisplay.deliveryButton(i,stops.length());
+            button(card,title,()->openRoute(request,stopIndex,title),true);
+        }
+    }
+    private void openTrip(JSONObject request){openRoute(request,-2,"عرض الرحلة");}
+
     private void showLedger(JSONObject finance){
         StringBuilder text=new StringBuilder();org.json.JSONArray entries=finance.optJSONArray("ledger");
         if(entries!=null)for(int i=0;i<entries.length();i++){
@@ -259,6 +269,15 @@ public final class MainActivity extends Activity {
             org.json.JSONArray stops=fare==null?null:fare.optJSONArray("stops");
             JSONObject stop=stops==null?null:stops.optJSONObject(stopIndex);
             if (stop!=null&&!stop.isNull("lat")&&!stop.isNull("lng")) intent.putExtra("lat",stop.optDouble("lat")).putExtra("lng",stop.optDouble("lng"));
+        }
+        if(stopIndex==-2){
+            try{
+                org.json.JSONArray points=new org.json.JSONArray();
+                if(!request.isNull("lat")&&!request.isNull("lng"))points.put(Api.object("lat",request.optDouble("lat"),"lng",request.optDouble("lng"),"label","موقع العميل","delivery",false));
+                JSONObject fare=request.optJSONObject("_fazaa");org.json.JSONArray stops=fare==null?null:fare.optJSONArray("stops");
+                if(stops!=null)for(int i=0;i<stops.length();i++){JSONObject stop=stops.optJSONObject(i);if(stop!=null&&!stop.isNull("lat")&&!stop.isNull("lng"))points.put(Api.object("lat",stop.optDouble("lat"),"lng",stop.optDouble("lng"),"label",DriverDisplay.text(stop.opt("label"),"وجهة التوصيل"),"delivery",true,"number",i+1));}
+                intent.putExtra("tripPoints",points.toString()).putExtra("hasDeliveries",points.length()>1);
+            }catch(org.json.JSONException ignored){}
         }
         startActivity(intent);
     }

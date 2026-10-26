@@ -41,11 +41,11 @@ public final class MapActivity extends Activity {
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(Color.rgb(247,246,242));root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         Button back=new Button(this);back.setText("العودة للطلبات");back.setOnClickListener(v->finish());root.addView(back);
         TextView title=new TextView(this);title.setText(DriverDisplay.text(getIntent().getStringExtra("routeTitle"),"خريطة العميل والسائق"));title.setTextSize(21);title.setTextColor(Color.rgb(31,41,51));title.setPadding(20,12,20,8);root.addView(title);
-        TextView caption=new TextView(this);caption.setText("الأصفر: موقعك · الأزرق: الموقع المقصود · المسار تقديري ويحتاج إنترنت.");caption.setPadding(20,4,20,8);root.addView(caption);
-        status=new TextView(this);status.setText("للتوجيه أثناء القيادة، اضغط بدء الملاحة عبر OsmAnd.");status.setPadding(20,4,20,8);root.addView(status);
-        refresh=new Button(this);refresh.setText("تحديث المسار من موقعي");refresh.setVisibility(hasRoute()?View.VISIBLE:View.GONE);refresh.setOnClickListener(v->loadRoute());root.addView(refresh);
-        Button navigation=new Button(this);navigation.setText("بدء الملاحة عبر OsmAnd");navigation.setTextColor(Color.rgb(31,41,51));navigation.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(255,180,0)));navigation.setVisibility(hasRoute()?View.VISIBLE:View.GONE);navigation.setOnClickListener(v->openOsmAnd());root.addView(navigation);
-        web=new WebView(this);WebSettings settings=web.getSettings();settings.setUserAgentString(settings.getUserAgentString()+" FazaaDriver/0.2.2 (+https://fazaa-sat7a.github.io/fazaa-sat7a/)");settings.setJavaScriptEnabled(true);settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setAllowFileAccessFromFileURLs(false);settings.setAllowUniversalAccessFromFileURLs(false);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setGeolocationEnabled(false);
+        TextView caption=new TextView(this);caption.setText(isOverview()?(getIntent().getBooleanExtra("hasDeliveries",false)?"الأصفر: موقعك · الأزرق: العميل · الأخضر: وجهات التوصيل بالترتيب.":"الأصفر: موقعك · الأزرق: العميل — لا توجد وجهة توصيل محفوظة في هذا الطلب."):"الأصفر: موقعك · الأزرق: الموقع المقصود · المسار تقديري ويحتاج إنترنت.");caption.setPadding(20,4,20,8);root.addView(caption);
+        status=new TextView(this);status.setText(isOverview()?(getIntent().getBooleanExtra("hasDeliveries",false)?"يشمل الوصول إلى العميل ثم التوصيل. الأجرة المعروضة ثابتة.":"يعرض هذا الطلب الطريق إلى العميل فقط."):"للتوجيه أثناء القيادة، اضغط بدء الملاحة عبر OsmAnd.");status.setPadding(20,4,20,8);root.addView(status);
+        refresh=new Button(this);refresh.setText(isOverview()?"تحديث عرض الرحلة":"تحديث المسار من موقعي");refresh.setVisibility(hasRoute()?View.VISIBLE:View.GONE);refresh.setOnClickListener(v->loadRoute());root.addView(refresh);
+        Button navigation=new Button(this);navigation.setText("بدء الملاحة عبر OsmAnd");navigation.setTextColor(Color.rgb(31,41,51));navigation.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(255,180,0)));navigation.setVisibility(hasRoute()&&!isOverview()?View.VISIBLE:View.GONE);navigation.setOnClickListener(v->openOsmAnd());root.addView(navigation);
+        web=new WebView(this);WebSettings settings=web.getSettings();settings.setUserAgentString(settings.getUserAgentString()+" FazaaDriver/0.2.3 (+https://fazaa-sat7a.github.io/fazaa-sat7a/)");settings.setJavaScriptEnabled(true);settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setAllowFileAccessFromFileURLs(false);settings.setAllowUniversalAccessFromFileURLs(false);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setGeolocationEnabled(false);
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
                 // Only explicit attribution links may leave the local map.
@@ -60,6 +60,7 @@ public final class MapActivity extends Activity {
         web.loadUrl(ASSET);if(hasRoute())loadRoute();
     }
 
+    private boolean isOverview(){return getIntent().getIntExtra("routeStop",-1)==-2;}
     private boolean hasRoute(){return !DriverDisplay.text(getIntent().getStringExtra("routeRequest"),"").isEmpty();}
 
     private void loadRoute(){
@@ -82,6 +83,7 @@ public final class MapActivity extends Activity {
     }
 
     private void openOsmAnd(){
+        if(isOverview())return;
         double lat=getIntent().getDoubleExtra("lat",Double.NaN),lng=getIntent().getDoubleExtra("lng",Double.NaN);
         JSONObject target=route==null?null:route.optJSONObject("target");
         if(target!=null){lat=target.optDouble("lat",Double.NaN);lng=target.optDouble("lng",Double.NaN);}
@@ -121,9 +123,15 @@ public final class MapActivity extends Activity {
         try{
             JSONArray points=new JSONArray();Location location=app.location;
             if(location!=null){boolean stale=SystemClock.elapsedRealtimeNanos()-location.getElapsedRealtimeNanos()>90_000_000_000L;points.put(Api.object("lat",location.getLatitude(),"lng",location.getLongitude(),"driver",true,"stale",stale,"label","موقع السائق"));}
+            if(isOverview()){
+                JSONArray targets=route==null?null:route.optJSONArray("targets");
+                if(targets==null)try{targets=new JSONArray(getIntent().getStringExtra("tripPoints"));}catch(Exception ignored){}
+                if(targets!=null)for(int i=0;i<targets.length();i++){JSONObject target=targets.optJSONObject(i);if(target!=null)points.put(target.put("preview",true));}
+            }else{
             JSONObject target=route==null?null:route.optJSONObject("target");
             if(target!=null)points.put(Api.object("lat",target.optDouble("lat"),"lng",target.optDouble("lng"),"driver",false,"delivery",hasRoute()&&getIntent().getIntExtra("routeStop",-1)>=0,"label",DriverDisplay.text(target.opt("label"),"الموقع المقصود")));
             else if(getIntent().hasExtra("lat"))points.put(Api.object("lat",getIntent().getDoubleExtra("lat",0),"lng",getIntent().getDoubleExtra("lng",0),"driver",false,"delivery",hasRoute()&&getIntent().getIntExtra("routeStop",-1)>=0,"label",hasRoute()&&getIntent().getIntExtra("routeStop",-1)>=0?"وجهة توصيل المركبة":"موقع العميل"));
+            }
             JSONObject state=Api.object("points",points,"route",route==null?JSONObject.NULL:route);
             web.evaluateJavascript("window.setMapState && window.setMapState("+state+")",null);
         }catch(Exception ignored){}
