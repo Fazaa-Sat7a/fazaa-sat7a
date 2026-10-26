@@ -28,21 +28,21 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 /** Separate customer app. Hosted UI keeps the browser and app behavior aligned. */
 public final class ClientActivity extends Activity {
     private static final String ORIGIN = "https://fazaa-sat7a.github.io";
-    private static final String URL = ORIGIN + "/fazaa-sat7a/?app=1";
+    private static final String URL = ORIGIN + "/fazaa-sat7a/?app=1&v=040";
     private WebView web;
     private LinearLayout cover;
     private TextView message;
     private Button retry;
-    private ProgressBar progress;
+    private TowSplashView splash;
+    private final Handler launchHandler=new Handler(Looper.getMainLooper());
+    private int launchGeneration;
     private GeolocationPermissions.Callback locationCallback;
     private String locationOrigin;
     private boolean failed;
@@ -60,21 +60,7 @@ public final class ClientActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.rgb(247,246,242));
         root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        root.addView(progress, new LinearLayout.LayoutParams(-1, dp(3)));
         notificationBanner = new LinearLayout(this);
-        notificationBanner.setGravity(Gravity.CENTER_VERTICAL);
-        notificationBanner.setPadding(dp(12),dp(3),dp(12),dp(3));
-        notificationBanner.setBackgroundColor(Color.rgb(255,247,219));
-        TextView notificationText = new TextView(this);
-        notificationText.setText("فعّل إشعارات مراحل طلبك"); notificationText.setTextSize(13);
-        notificationBanner.addView(notificationText,new LinearLayout.LayoutParams(0,-2,1));
-        Button notificationButton=new Button(this);
-        notificationButton.setText("تفعيل"); notificationButton.setTextSize(12);
-        notificationButton.setOnClickListener(v -> requestNotifications());
-        notificationBanner.addView(notificationButton,new LinearLayout.LayoutParams(-2,-2));
-        root.addView(notificationBanner,new LinearLayout.LayoutParams(-1,-2));
-        updateNotificationBanner();
         FrameLayout frame = new FrameLayout(this);
         root.addView(frame, new LinearLayout.LayoutParams(-1, 0, 1));
         web = new WebView(this);
@@ -89,7 +75,7 @@ public final class ClientActivity extends Activity {
         settings.setSafeBrowsingEnabled(true);
         settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.2.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.4.0");
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         frame.addView(web, new FrameLayout.LayoutParams(-1,-1));
 
@@ -98,10 +84,8 @@ public final class ClientActivity extends Activity {
         cover.setGravity(Gravity.CENTER);
         cover.setPadding(dp(26),dp(26),dp(26),dp(26));
         cover.setBackgroundColor(Color.rgb(247,246,242));
-        ImageView icon = new ImageView(this);
-        icon.setImageResource(R.drawable.app_icon);
-        icon.setContentDescription("سطحة تحمل سيارة");
-        cover.addView(icon, new LinearLayout.LayoutParams(dp(125),dp(125)));
+        splash=new TowSplashView(this);
+        cover.addView(splash,new LinearLayout.LayoutParams(-1,dp(185)));
         TextView title = new TextView(this);
         title.setText("فزعة"); title.setTextSize(32); title.setTextColor(Color.rgb(31,41,51)); title.setTypeface(null, Typeface.BOLD);
         cover.addView(title);
@@ -115,10 +99,6 @@ public final class ClientActivity extends Activity {
         frame.addView(cover, new FrameLayout.LayoutParams(-1,-1));
 
         web.setWebChromeClient(new WebChromeClient() {
-            @Override public void onProgressChanged(WebView view, int value) {
-                progress.setProgress(value);
-                progress.setVisibility(value < 100 ? View.VISIBLE : View.GONE);
-            }
             @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
                 if (!LocationOriginPolicy.allows(origin) || !trustedPage(Uri.parse(web.getUrl() == null ? "" : web.getUrl()))) {
                     callback.invoke(origin,false,false); return;
@@ -133,14 +113,18 @@ public final class ClientActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if (!request.isForMainFrame()) return true;
-                if (trustedPage(request.getUrl())) return false;
+                if (trustedPage(request.getUrl())) {
+                    if ("notifications".equals(request.getUrl().getQueryParameter("native"))) {
+                        if (request.hasGesture()) requestNotifications();
+                        return true;
+                    }
+                    return false;
+                }
                 openExternal(request.getUrl()); return true;
             }
             @Override public void onPageFinished(WebView view, String url) {
                 if (!failed && trustedPage(Uri.parse(url))) {
-                    cover.setVisibility(View.GONE);
-                    publishPushDevice();
-                    deliverNotificationRequest();
+                    waitForCustomerUI(++launchGeneration,0);
                 }
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
@@ -162,17 +146,27 @@ public final class ClientActivity extends Activity {
 
     private void load() {
         failed = false;
+        launchGeneration++;splash.setLoading(true);
         clearLocationPrompt();
         cover.setVisibility(View.VISIBLE);
         retry.setVisibility(View.GONE);
-        message.setText("جاري فتح فزعة…");
-        progress.setVisibility(View.VISIBLE);
+        message.setText("فزعتك عالطريق…");
         web.loadUrl(URL);
     }
     private void showFailure() {
         failed = true;
         message.setText("تعذّر الاتصال. تحقّق من الإنترنت ثم حاول مجدداً.");
-        retry.setVisibility(View.VISIBLE); cover.setVisibility(View.VISIBLE); progress.setVisibility(View.GONE);
+        retry.setVisibility(View.VISIBLE); cover.setVisibility(View.VISIBLE); splash.setLoading(false);launchGeneration++;
+    }
+    private void waitForCustomerUI(int generation,int attempt){
+        if(destroyed||failed||generation!=launchGeneration||!isCustomerPage())return;
+        web.evaluateJavascript("Boolean(window.FazaaCustomerReady)",ready->{
+            if(destroyed||failed||generation!=launchGeneration)return;
+            if("true".equals(ready)){
+                cover.setVisibility(View.GONE);splash.setLoading(false);publishPushDevice();deliverNotificationRequest();showNotificationIntro();
+            }else if(attempt>=80)showFailure();
+            else launchHandler.postDelayed(()->waitForCustomerUI(generation,attempt+1),250);
+        });
     }
     private static boolean trustedPage(Uri uri) {
         String path = uri.getPath();
@@ -181,7 +175,17 @@ public final class ClientActivity extends Activity {
             && ("/fazaa-sat7a/".equals(path) || "/fazaa-sat7a/index.html".equals(path));
     }
     private void updateNotificationBanner() {
-        notificationBanner.setVisibility(PushStore.allowed(this) ? View.GONE : View.VISIBLE);
+        notificationBanner.setVisibility(View.GONE);
+    }
+    private void showNotificationIntro() {
+        if (destroyed || isFinishing() || PushStore.allowed(this)
+            || PushStore.prefs(this).getBoolean("notification_intro_v03",false)) return;
+        PushStore.prefs(this).edit().putBoolean("notification_intro_v03",true).apply();
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("خليك على اطلاع بفزعتك")
+            .setMessage("فعّل الإشعارات ليصلك قبول السائق ووصوله وكل تحديث يخص طلبك، حتى عندما يكون التطبيق مغلقاً.")
+            .setPositiveButton("تفعيل الإشعارات",(dialog,which)->requestNotifications())
+            .setNegativeButton("لاحقاً",null).show();
     }
     private void requestNotifications() {
         if (Build.VERSION.SDK_INT >= 33
@@ -267,7 +271,7 @@ public final class ClientActivity extends Activity {
     }
     @Override protected void onPause() { web.onPause(); super.onPause(); }
     @Override protected void onDestroy() {
-        destroyed=true;
+        destroyed=true;launchGeneration++;launchHandler.removeCallbacksAndMessages(null);splash.setLoading(false);
         if(visibleActivity.get()==this) visibleActivity.clear();
         clearLocationPrompt(); web.stopLoading(); web.setWebChromeClient(null);
         ((android.view.ViewGroup)web.getParent()).removeView(web); web.destroy(); super.onDestroy();
