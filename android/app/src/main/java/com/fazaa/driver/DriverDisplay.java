@@ -24,9 +24,7 @@ final class DriverDisplay {
         } catch (RuntimeException ignored) { return "—"; }
     }
 
-    static String deliveryButton(int index, int count, String name) {
-        String label = count > 1 ? "المسار إلى وجهة توصيل المركبة " + (index + 1) : "المسار إلى وجهة توصيل المركبة";
-        String clean = text(name, "");
-        return clean.isEmpty() ? label : label + " — " + clean;
+    static String deliveryButton(int index, int count) {
+        return count > 1 ? "مسار التوصيل " + (index + 1) : "مسار التوصيل";
     }
 }

@@ -1,6 +1,7 @@
 package com.fazaa.driver;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.location.Location;
@@ -16,6 +17,7 @@ import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -40,9 +42,10 @@ public final class MapActivity extends Activity {
         Button back=new Button(this);back.setText("العودة للطلبات");back.setOnClickListener(v->finish());root.addView(back);
         TextView title=new TextView(this);title.setText(DriverDisplay.text(getIntent().getStringExtra("routeTitle"),"خريطة العميل والسائق"));title.setTextSize(21);title.setTextColor(Color.rgb(31,41,51));title.setPadding(20,12,20,8);root.addView(title);
         TextView caption=new TextView(this);caption.setText("الأصفر: موقعك · الأزرق: الموقع المقصود · المسار تقديري ويحتاج إنترنت.");caption.setPadding(20,4,20,8);root.addView(caption);
-        status=new TextView(this);status.setText("عرض المسار داخل التطبيق دون توجيه صوتي.");status.setPadding(20,4,20,8);root.addView(status);
+        status=new TextView(this);status.setText("للتوجيه أثناء القيادة، اضغط بدء الملاحة عبر OsmAnd.");status.setPadding(20,4,20,8);root.addView(status);
         refresh=new Button(this);refresh.setText("تحديث المسار من موقعي");refresh.setVisibility(hasRoute()?View.VISIBLE:View.GONE);refresh.setOnClickListener(v->loadRoute());root.addView(refresh);
-        web=new WebView(this);WebSettings settings=web.getSettings();settings.setUserAgentString(settings.getUserAgentString()+" FazaaDriver/0.2.1 (+https://fazaa-sat7a.github.io/fazaa-sat7a/)");settings.setJavaScriptEnabled(true);settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setAllowFileAccessFromFileURLs(false);settings.setAllowUniversalAccessFromFileURLs(false);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setGeolocationEnabled(false);
+        Button navigation=new Button(this);navigation.setText("بدء الملاحة عبر OsmAnd");navigation.setTextColor(Color.rgb(31,41,51));navigation.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(255,180,0)));navigation.setVisibility(hasRoute()?View.VISIBLE:View.GONE);navigation.setOnClickListener(v->openOsmAnd());root.addView(navigation);
+        web=new WebView(this);WebSettings settings=web.getSettings();settings.setUserAgentString(settings.getUserAgentString()+" FazaaDriver/0.2.2 (+https://fazaa-sat7a.github.io/fazaa-sat7a/)");settings.setJavaScriptEnabled(true);settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setAllowFileAccessFromFileURLs(false);settings.setAllowUniversalAccessFromFileURLs(false);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setGeolocationEnabled(false);
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
                 // Only explicit attribution links may leave the local map.
@@ -77,6 +80,32 @@ public final class MapActivity extends Activity {
             });
         });
     }
+
+    private void openOsmAnd(){
+        double lat=getIntent().getDoubleExtra("lat",Double.NaN),lng=getIntent().getDoubleExtra("lng",Double.NaN);
+        JSONObject target=route==null?null:route.optJSONObject("target");
+        if(target!=null){lat=target.optDouble("lat",Double.NaN);lng=target.optDouble("lng",Double.NaN);}
+        if(!OsmAndRoute.valid(lat,lng)){toast("الموقع المقصود غير متاح. ارجع للطلب وحدّث الحالة.");return;}
+        Location own=app.location;
+        if(own==null||SystemClock.elapsedRealtimeNanos()-own.getElapsedRealtimeNanos()>90_000_000_000L||!OsmAndRoute.valid(own.getLatitude(),own.getLongitude())){toast("فعّل GPS وانتظر تحديث موقعك ثم اضغط بدء الملاحة.");return;}
+        android.net.Uri uri=android.net.Uri.parse(OsmAndRoute.link(own.getLatitude(),own.getLongitude(),lat,lng));
+        // Package-specific intents prevent another map application from taking this action.
+        for(String packageName:OsmAndRoute.PACKAGES){
+            try{startActivity(new Intent(Intent.ACTION_VIEW,uri).setPackage(packageName));return;}
+            catch(android.content.ActivityNotFoundException ignored){}
+            catch(SecurityException ignored){}
+        }
+        new AlertDialog.Builder(this).setTitle("تثبيت OsmAnd").setMessage("ثبّت OsmAnd وحمّل خريطة سوريا، ثم ارجع إلى فزعة واضغط بدء الملاحة مجدداً.").setPositiveButton("فتح صفحة التثبيت",(dialog,which)->installOsmAnd()).setNegativeButton("لاحقاً",null).show();
+    }
+
+    private void installOsmAnd(){
+        try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("market://details?id=net.osmand")).setPackage("com.android.vending"));}
+        catch(android.content.ActivityNotFoundException e){
+            try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://osmand.net/")));}
+            catch(android.content.ActivityNotFoundException missing){toast("افتح متجر التطبيقات وابحث عن OsmAnd.");}
+        }
+    }
+    private void toast(String value){Toast.makeText(this,value,Toast.LENGTH_LONG).show();}
 
     private static String routeError(String reason){
         String value=reason==null?"":reason;

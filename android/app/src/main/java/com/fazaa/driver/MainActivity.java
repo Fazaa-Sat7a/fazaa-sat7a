@@ -193,7 +193,7 @@ public final class MainActivity extends Activity {
             JSONObject stop=stops.optJSONObject(i);if(stop==null)continue;
             label(card,(i+1)+". "+stop.optString("label","الوجهة"),15,true);
             final int stopIndex=i;
-            String routeTitle=DriverDisplay.deliveryButton(i,stops.length(),stop.optString("label", ""));
+            String routeTitle=DriverDisplay.deliveryButton(i,stops.length());
             button(card,routeTitle,()->openRoute(request,stopIndex,routeTitle),true);
         }
     }
