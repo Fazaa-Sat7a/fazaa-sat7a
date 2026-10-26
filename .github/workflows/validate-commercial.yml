@@ -40,7 +40,8 @@ jobs:
       - name: Exercise roles, pricing, fixed totals, matching, ledger and privacy
         run: psql -v ON_ERROR_STOP=1 -f commercial-tests/commercial-checks.sql
   browser:
-    runs-on: ubuntu-latest
+    # Pinned to a platform supported by the selected Playwright release.
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
