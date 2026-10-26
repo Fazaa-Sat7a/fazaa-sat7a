@@ -1,0 +1,46 @@
+name: Validate Fazaa Driver Map Update
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  routes-and-map:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify authenticated routing and map rendering
+        run: |
+          node driver-map-tests/driver-route-checks.mjs
+          node driver-map-tests/map-checks.cjs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Test actual display formatting and labels
+        run: |
+          mkdir -p /tmp/fazaa-driver-display
+          javac -encoding UTF-8 -d /tmp/fazaa-driver-display android/app/src/main/java/com/fazaa/driver/DriverDisplay.java driver-map-tests/DriverDisplayChecks.java
+          java -cp /tmp/fazaa-driver-display com.fazaa.driver.DriverDisplayChecks
+  android:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Compile and lint the actual driver app
+        working-directory: android
+        run: gradle --no-daemon :app:assembleDebug :app:lintDebug
