@@ -155,28 +155,32 @@ public final class MainActivity extends Activity {
         if (!note.isEmpty()) label(card, note, 15, false);
         fareDetails(card,offer);
         button(card, "عرض الرحلة", () -> openTrip(offer), true);
-        Button acceptButton=button(card, "قبول الطلب", () -> app.accept(offer.optString("id")), !app.busy && app.service != null && offer.optJSONObject("_fazaa")!=null && System.currentTimeMillis() - syncedAt < 30000);
-        acceptButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(21,128,61)));acceptButton.setTextColor(Color.WHITE);
+        primaryButton(card, "قبول الطلب", () -> app.accept(offer.optString("id")), !app.busy && app.service != null && offer.optJSONObject("_fazaa")!=null && System.currentTimeMillis() - syncedAt < 30000);
     }
 
     private void showCurrent(JSONObject request) {
         String status = request.optString("status"), id = request.optString("id");
+        DriverStage stage=DriverStage.of(status);
         LinearLayout card = card();
-        label(card, "طلبك الحالي", 23, true);
-        label(card, status.equals("accepted") ? "تم قبول الطلب" : status.equals("arrived") ? "السائق عند العميل" : "الخدمة جارية", 17, true);
+        label(card, stage==DriverStage.DONE||stage==DriverStage.CLOSED ? "تفاصيل الطلب" : "طلبك الحالي", 23, true);
+        label(card, stage.caption, 17, true);
         label(card, problem(request.optString("problem")) + " · " + car(request.optString("car_type")), 16, false);
         label(card, "مرجع الطلب: " + id.substring(0, Math.min(8, id.length())), 13, false);
         String note = DriverDisplay.text(request.opt("note"), "");
         if (!note.isEmpty()) label(card, note, 15, false);
         fareDetails(card,request);
-        button(card, "المسار إلى العميل", () -> openRoute(request, -1, "المسار إلى العميل"), true);
-        deliveryRoutes(card,request);
-        String phone = request.optString("customer_phone", "").replaceAll("[^0-9+]", "");
-        if (!phone.isEmpty()) button(card, "اتصال بالعميل", () -> external(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phone))), true);
-        if (status.equals("accepted")) button(card, "وصلت للعميل", () -> app.changeStatus(id, "arrived"), !app.busy);
-        if (status.equals("arrived")) button(card, "بدأت نقل السيارة", () -> app.changeStatus(id, "in_progress"), !app.busy);
-        if (status.equals("arrived") || status.equals("in_progress")) button(card, "أنهيت الخدمة", () -> confirm("إنهاء الخدمة؟", "تأكّد من اكتمال الخدمة وتسوية الأجرة الكاش المتفق عليها مع العميل قبل الإنهاء.", () -> app.changeStatus(id, "done")), !app.busy);
-        button(card, "إلغاء الطلب", () -> confirm("إلغاء الطلب الحالي؟", "أخبر العميل قبل الإلغاء.", () -> app.changeStatus(id, "cancelled_driver")), !app.busy);
+        if(stage.hasNext())primaryButton(card,stage.nextLabel,()->{
+            if(stage==DriverStage.IN_PROGRESS)confirm("إنهاء الخدمة؟","تأكّد من اكتمال الخدمة وتسوية الأجرة الكاش قبل الإنهاء.",()->app.changeStatus(id,stage.nextStatus));
+            else app.changeStatus(id,stage.nextStatus);
+        },!app.busy);
+        if(stage.pickupRoute())button(card,"المسار إلى العميل",()->openRoute(request,-1,"المسار إلى العميل"),true);
+        if(stage.deliveryRoutes())deliveryRoutes(card,request);
+        String phone=DriverDisplay.text(request.opt("customer_phone"),"").replaceAll("[^0-9+]","");
+        if(stage.contact()&&!phone.isEmpty())button(card,"اتصال بالعميل",()->external(new Intent(Intent.ACTION_DIAL,Uri.parse("tel:"+phone))),true);
+        if(stage.cancel()){
+            Button cancel=button(card,"إلغاء الطلب",()->confirm("إلغاء الطلب الحالي؟","أخبر العميل قبل الإلغاء.",()->app.changeStatus(id,"cancelled_driver")),!app.busy);
+            cancel.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(242,243,245)));cancel.setTextColor(Color.rgb(164,38,44));
+        }
         label(card, request.optJSONObject("_fazaa")!=null&&request.optJSONObject("_fazaa").optBoolean("priced")?"السعر مثبت؛ لا تضف مبلغاً خارج موافقة العميل في التطبيق.":"طلب قديم سابق لتفعيل التسعير الثابت.", 13, false);
     }
 
@@ -293,6 +297,11 @@ public final class MainActivity extends Activity {
     private TextView label(LinearLayout parent, String text, int size, boolean bold) {
         TextView view = new TextView(this); view.setText(text); view.setTextSize(size); view.setTextColor(INK); view.setGravity(Gravity.START); view.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG); view.setPadding(0, dp(5), 0, dp(6));
         if (bold) view.setTypeface(null, Typeface.BOLD); parent.addView(view); return view;
+    }
+    private Button primaryButton(LinearLayout parent,String text,Runnable action,boolean enabled){
+        Button view=button(parent,text,action,enabled);
+        view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(21,128,61)));view.setTextColor(Color.WHITE);
+        return view;
     }
     private Button button(LinearLayout parent, String text, Runnable action, boolean enabled) {
         Button view = new Button(this); view.setText(text); view.setTextSize(15); view.setTextColor(INK); view.setAllCaps(false); view.setMinHeight(dp(50));
