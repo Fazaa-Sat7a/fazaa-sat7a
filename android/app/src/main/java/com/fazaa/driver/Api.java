@@ -97,7 +97,7 @@ final class Api {
         HttpURLConnection connection = (HttpURLConnection) new URL(BASE + path).openConnection();
         connection.setRequestMethod(method);
         connection.setConnectTimeout(12000);
-        connection.setReadTimeout(12000);
+        connection.setReadTimeout(path.equals("/functions/v1/driver-route") ? 25000 : 12000);
         connection.setInstanceFollowRedirects(false);
         connection.setRequestProperty("apikey", PUBLIC_KEY);
         connection.setRequestProperty("Accept", "application/json");
@@ -119,7 +119,7 @@ final class Api {
                 String reason = "تعذّر الاتصال بالخادم (" + status + ").";
                 try {
                     JSONObject error = new JSONObject(text);
-                    reason = error.optString("message", error.optString("msg", error.optString("error_description", reason)));
+                    reason = error.optString("message", error.optString("msg", error.optString("error_description", error.optString("error", reason))));
                 } catch (Exception ignored) { }
                 throw new HttpError(status, reason);
             }

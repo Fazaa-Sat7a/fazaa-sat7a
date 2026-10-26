@@ -150,8 +150,9 @@ public final class MainActivity extends Activity {
         LinearLayout card = card();
         label(card, problem(offer.optString("problem")) + " · " + car(offer.optString("car_type")), 20, true);
         label(card, String.format(Locale.ROOT, "المسافة المباشرة: %.1f كم", offer.optDouble("distance_km", 0)), 15, false);
-        label(card, "وقت الطلب: " + offer.optString("created_at", "—"), 13, false);
-        if (!offer.optString("note").isEmpty()) label(card, offer.optString("note"), 15, false);
+        label(card, "وقت الطلب: " + DriverDisplay.time(offer.optString("created_at", "")), 13, false);
+        String note = DriverDisplay.text(offer.opt("note"), "");
+        if (!note.isEmpty()) label(card, note, 15, false);
         fareDetails(card,offer);
         button(card, "عرض موقع العميل", () -> openMap(offer), true);
         button(card, "قبول الطلب", () -> app.accept(offer.optString("id")), !app.busy && app.service != null && offer.optJSONObject("_fazaa")!=null && System.currentTimeMillis() - syncedAt < 30000);
@@ -164,10 +165,11 @@ public final class MainActivity extends Activity {
         label(card, status.equals("accepted") ? "تم قبول الطلب" : status.equals("arrived") ? "السائق عند العميل" : "الخدمة جارية", 17, true);
         label(card, problem(request.optString("problem")) + " · " + car(request.optString("car_type")), 16, false);
         label(card, "مرجع الطلب: " + id.substring(0, Math.min(8, id.length())), 13, false);
-        if (!request.optString("note").isEmpty()) label(card, request.optString("note"), 15, false);
+        String note = DriverDisplay.text(request.opt("note"), "");
+        if (!note.isEmpty()) label(card, note, 15, false);
         fareDetails(card,request);
         button(card, "موقع العميل على الخريطة", () -> openMap(request), true);
-        button(card, "فتح الملاحة", () -> navigate(request), true);
+        button(card, "المسار إلى العميل", () -> openRoute(request, -1, "المسار إلى العميل"), true);
         String phone = request.optString("customer_phone", "").replaceAll("[^0-9+]", "");
         if (!phone.isEmpty()) button(card, "اتصال بالعميل", () -> external(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phone))), true);
         if (status.equals("accepted")) button(card, "وصلت للعميل", () -> app.changeStatus(id, "arrived"), !app.busy);
@@ -190,14 +192,15 @@ public final class MainActivity extends Activity {
         if(stops!=null)for(int i=0;i<stops.length();i++){
             JSONObject stop=stops.optJSONObject(i);if(stop==null)continue;
             label(card,(i+1)+". "+stop.optString("label","الوجهة"),15,true);
-            Uri target=Uri.parse("https://www.google.com/maps/dir/?api=1&destination="+stop.optDouble("lat")+","+stop.optDouble("lng"));
-            button(card,"ملاحة إلى الوجهة "+(i+1),()->external(new Intent(Intent.ACTION_VIEW,target)),true);
+            final int stopIndex=i;
+            String routeTitle=DriverDisplay.deliveryButton(i,stops.length(),stop.optString("label", ""));
+            button(card,routeTitle,()->openRoute(request,stopIndex,routeTitle),true);
         }
     }
     private void showLedger(JSONObject finance){
         StringBuilder text=new StringBuilder();org.json.JSONArray entries=finance.optJSONArray("ledger");
         if(entries!=null)for(int i=0;i<entries.length();i++){
-            JSONObject e=entries.optJSONObject(i);if(e!=null)text.append(e.optString("created_at")).append("\n").append("commission".equals(e.optString("kind"))?"عمولة رحلة: ":"تسديد: ").append(e.optString("amount")).append(" ").append(finance.optString("currency_label")).append("\n\n");
+            JSONObject e=entries.optJSONObject(i);if(e!=null)text.append(DriverDisplay.time(e.optString("created_at", ""))).append("\n").append("commission".equals(e.optString("kind"))?"عمولة رحلة: ":"تسديد: ").append(e.optString("amount")).append(" ").append(finance.optString("currency_label")).append("\n\n");
         }
         new AlertDialog.Builder(this).setTitle("كشف حساب فزعة").setMessage(text.length()>0?text.toString():"لا توجد حركات مالية بعد.").setPositiveButton("إغلاق",null).show();
     }
@@ -244,10 +247,20 @@ public final class MainActivity extends Activity {
         if (own != null) intent.putExtra("ownLat", own.getLatitude()).putExtra("ownLng", own.getLongitude());
         startActivity(intent);
     }
-    private void navigate(JSONObject request) {
-        double lat = request.optDouble("lat", Double.NaN), lng = request.optDouble("lng", Double.NaN);
-        if (!Double.isFinite(lat) || !Double.isFinite(lng)) { toast("موقع العميل غير متاح."); return; }
-        external(new Intent(Intent.ACTION_VIEW, Uri.parse("geo:" + lat + "," + lng + "?q=" + lat + "," + lng + "(" + Uri.encode("موقع العميل") + ")")));
+    private void openRoute(JSONObject request, int stopIndex, String title) {
+        String id = DriverDisplay.text(request.opt("id"), "");
+        if (id.isEmpty()) { toast("تعذّر تحديد الطلب. حدّث الحالة وحاول مجدداً."); return; }
+        Intent intent = new Intent(this, MapActivity.class);
+        intent.putExtra("routeRequest", id).putExtra("routeStop", stopIndex).putExtra("routeTitle", title);
+        if (stopIndex < 0 && !request.isNull("lat") && !request.isNull("lng")) {
+            intent.putExtra("lat", request.optDouble("lat")).putExtra("lng", request.optDouble("lng"));
+        } else if (stopIndex >= 0) {
+            JSONObject fare=request.optJSONObject("_fazaa");
+            org.json.JSONArray stops=fare==null?null:fare.optJSONArray("stops");
+            JSONObject stop=stops==null?null:stops.optJSONObject(stopIndex);
+            if (stop!=null&&!stop.isNull("lat")&&!stop.isNull("lng")) intent.putExtra("lat",stop.optDouble("lat")).putExtra("lng",stop.optDouble("lng"));
+        }
+        startActivity(intent);
     }
     private void external(Intent intent) { try { startActivity(intent); } catch (android.content.ActivityNotFoundException e) { toast("لا يوجد تطبيق مناسب لفتح هذا الرابط."); } }
     private void confirm(String title, String message, Runnable action) { new AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("تأكيد", (d, w) -> action.run()).setNegativeButton("رجوع", null).show(); }
