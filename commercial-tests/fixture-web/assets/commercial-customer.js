@@ -1,6 +1,8 @@
 'use strict';
 (()=>{
  const E=id=>document.getElementById(id),app=window.FazaaApp;
+ if(typeof statusInfo!=='undefined'&&statusInfo.accepted)statusInfo.accepted[2]='تواصل مع السائق لتأكيد الموقع. الأجرة مثبتة كما وافقت عليها.';
+ for(const [selector,copy] of [['.trust-row span','سعر واضح قبل الحجز'],['.price-note','السعر شامل التحميل والتنزيل ويثبت عند الحجز.']]){const target=document.querySelector(selector);if(target)target.textContent=copy;}
  const money=(n,c)=>Number(n).toLocaleString('ar-SY',{maximumFractionDigits:2})+' '+c;
  function node(tag,cls='',text){const n=document.createElement(tag);n.className=cls;if(text!==undefined)n.textContent=text;return n;}
  function button(text,action,cls='secondary'){const b=node('button',cls,text);b.type='button';b.addEventListener('click',action);return b;}
@@ -64,5 +66,5 @@
  const nativeLink=node('a','native-notification-link','إعدادات إشعارات الطلب');nativeLink.href='./?app=1&native=notifications';nativeLink.hidden=!new URLSearchParams(location.search).has('app');E('view-account').insertBefore(nativeLink,history);
  new MutationObserver(()=>invalidate()).observe(E('region-label'),{childList:true,subtree:true});
  syncVehicle();paintStops();
- (async()=>{try{const result=await client.rpc('get_fazaa_commercial_catalog',{});if(result.error)throw result.error;catalog=result.data;select.replaceChildren(new Option('اختر ماركة المركبة وموديلها',''));for(const v of catalog.vehicles)select.append(new Option(v.make+' — '+v.model,v.id));modelMessage.textContent=catalog.enabled?'':'التسعير قيد الإعداد. ستظهر المركبات بعد اعتماد مواصفاتها.';}catch{select.replaceChildren(new Option('قائمة المركبات غير متاحة حالياً',''));modelMessage.textContent='يلزم تفعيل تحديث التسعير في قاعدة البيانات.';}})();
+ (async()=>{try{const result=await client.rpc('get_fazaa_commercial_catalog',{});if(result.error)throw result.error;catalog=result.data;if(catalog.trial_mode){const badge=node('p','info-note','تجربة خاصة — أسعار ومواصفات للاختبار فقط، وليست خدمة نقل فعلية.');E('view-request').prepend(badge);}select.replaceChildren(new Option('اختر ماركة المركبة وموديلها',''));for(const v of catalog.vehicles)select.append(new Option(v.make+' — '+v.model,v.id));modelMessage.textContent=catalog.enabled?'':'التسعير قيد الإعداد. ستظهر المركبات بعد اعتماد مواصفاتها.';}catch{select.replaceChildren(new Option('قائمة المركبات غير متاحة حالياً',''));modelMessage.textContent='يلزم تفعيل تحديث التسعير في قاعدة البيانات.';}})();
 })();

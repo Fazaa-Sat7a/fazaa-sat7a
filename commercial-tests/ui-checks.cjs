@@ -10,7 +10,7 @@ const mock=`(()=>{
  const regions=[{code:'damascus',name:'دمشق',enabled:true}];
  const vehicle={id:'${ids.vehicle}',make:'مركبة اختبار',model:'سيدان',car_type:'small',year_from:2010,year_to:2025};
  const classes=[{id:'test-class',name:'فئة سطحة اختبار',length_m:5,width_m:2.2,capacity_kg:2000,enabled:true}];
- const catalog={enabled:true,vehicles:[vehicle],matches:[false,true].map(enclosed=>({vehicle_id:vehicle.id,region_code:'damascus',enclosed,truck_name:enclosed?'سطحة مغلقة اختبار':'سطحة عادية اختبار',length_m:5}))};
+ const catalog={enabled:!new URLSearchParams(location.search).has('test_public'),trial_mode:!new URLSearchParams(location.search).has('test_public'),vehicles:[vehicle],matches:[false,true].map(enclosed=>({vehicle_id:vehicle.id,region_code:'damascus',enclosed,truck_name:enclosed?'سطحة مغلقة اختبار':'سطحة عادية اختبار',length_m:5}))};
  const admin={settings:{enabled:false,commission_pct:0,currency_label:'ل.س — اختبار',credit_limit:null,settlement_days:7},classes,vehicles:[vehicle],regions,drivers:[],fleet:[],ledger:[],tariffs:[],zones:[]};
  const client={auth:{getSession:async()=>({data:{session},error:null}),getUser:async()=>({data:{user},error:null}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}),signInAnonymously:async()=>({data:{session},error:null}),signOut:async()=>({error:null})},rpc:async(name,args={})=>{
  window.__calls.push({name,args});let data;
@@ -26,6 +26,7 @@ const mock=`(()=>{
  case 'is_admin':data=true;break;
  case 'admin_get_fazaa_commercial':data=admin;break;
  case 'admin_save_fazaa_commercial':data=null;break;
+ case 'admin_get_fazaa_trial_customers':data=[];break;
  default:return {data:null,error:{message:'Unexpected RPC '+name}};
  }return {data,error:null};
  },from:()=>{const builder=new Proxy({}, {get(t,key){if(key==='then')return resolve=>Promise.resolve({data:[],error:null,count:0}).then(resolve);return ()=>builder}});return builder;}};
@@ -60,6 +61,7 @@ const mock=`(()=>{
  await page.evaluate(()=>{window.__tripStatus='done';refresh();});await page.waitForSelector('#rating-form:visible');await page.getByRole('button',{name:'3 من 5 نجوم',exact:true}).click();await page.fill('#rating-comment','تعليق خاص بالإدارة');await page.click('#rate');await page.waitForFunction(()=>window.__calls.some(x=>x.name==='rate_customer_request'));
  const rating=await page.evaluate(()=>window.__calls.find(x=>x.name==='rate_customer_request'));assert.equal(rating.args.p_stars,3);assert.equal(rating.args.p_comment,'تعليق خاص بالإدارة');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile layout must not overflow');
  await page.screenshot({path:path.join(__dirname,'screenshots/customer-invoice.png'),fullPage:true});
+ await page.goto(base+'/?test_public=1');await page.waitForFunction(()=>!!window.FazaaApp);assert.equal(await page.locator('.bottom-nav button').count(),4,'public users retain legacy navigation while pricing is disabled');assert.equal(await page.locator('#vehicle-model').count(),0,'public users do not receive the private pricing UI');
  await page.setViewportSize({width:1280,height:900});await page.goto(base+'/admin.html');await page.waitForSelector('#dashboard:visible');await page.getByRole('button',{name:'التعرفة والأسطول والعمولات'}).click();await page.waitForSelector('#fare-admin-settings-commission_pct');assert.equal(await page.inputValue('#fare-admin-settings-commission_pct'),'0');assert.equal(await page.locator('#fare-admin-settings-enabled').isChecked(),false);await page.screenshot({path:path.join(__dirname,'screenshots/admin-commercial.png'),fullPage:true});
  assert.deepEqual(errors,[]);console.log('PASS: real browser mobile booking, VIP year required, account/history merged, stale quote blocked, fixed fare booking, approved extension, private rating, admin zero commission defaults and no mobile overflow');
  }catch(error){

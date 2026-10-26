@@ -1,0 +1,33 @@
+-- Fixture only: no production data or settings.
+do $$ begin if current_database()<>'fazaa_commercial_test' then raise exception 'Disposable test database required';end if;end $$;
+update auth.users set email=case id when 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' then 'admin@example.test' when 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' then 'customer@example.test' else id::text||'@example.test' end;
+select set_config('request.jwt.claims','{"sub":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","role":"authenticated"}',false);
+select public.admin_save_fazaa_commercial('settings','{"enabled":false,"commission_pct":0,"credit_limit":null,"settlement_days":7,"currency_label":"TEST"}');
+select set_config('request.jwt.claims','{"sub":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","role":"authenticated"}',false);
+select public.test_assert(not (public.get_fazaa_commercial_catalog()->>'enabled')::boolean,'ordinary user cannot activate pricing');
+select public.expect_error('select public.admin_set_fazaa_trial_customer(''customer@example.test'',true)','ADMIN_REQUIRED');
+select public.expect_error('select public.prepare_fazaa_quote(''{}'')','PRICING_NOT_READY');
+select public.test_assert(not has_table_privilege('authenticated','public.fazaa_trial_customers','select'),'trial allowlist is private');
+select set_config('request.jwt.claims','{"sub":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","role":"authenticated"}',false);
+select public.admin_set_fazaa_trial_customer('customer@example.test',true);
+do $$ declare q uuid;r uuid;input jsonb:='{"region_code":"damascus","vehicle_id":"33333333-3333-4333-8333-333333333333","enclosed":false,"pickup":{"lat":33.5,"lng":36.2},"stops":[{"lat":33.6,"lng":36.3,"label":"TEST garage"}]}';begin
+ perform set_config('request.jwt.claims','{"sub":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","role":"authenticated"}',false);
+ perform public.test_assert((public.get_fazaa_commercial_catalog()->>'enabled')::boolean,'allowlisted user can test without public activation');
+ perform public.test_assert((public.get_fazaa_commercial_catalog()->>'trial_mode')::boolean,'private mode explicitly identified');
+ q:=(public.prepare_fazaa_quote(input)->>'ticket_id')::uuid;
+ perform public.finish_fazaa_quote(q,3200,600);
+ r:=public.create_fazaa_request(q,'engine','0999999999');
+ perform public.test_assert((select (fare_terms->>'trial_mode')::boolean and (fare_terms->>'commission_pct')::numeric=0 from public.requests where id=r),'trial is labeled and zero commission');
+ perform set_config('request.jwt.claims','{"sub":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","role":"authenticated"}',false);
+ perform public.test_assert(not (public.get_fazaa_commercial_catalog()->>'enabled')::boolean,'other account still not enabled');
+ perform public.test_assert(public.get_fazaa_trip_details(r) is null,'other account cannot inspect trial trip');
+ perform set_config('request.jwt.claims','{"sub":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","role":"authenticated"}',false);
+ perform public.admin_set_fazaa_trial_customer('customer@example.test',false);
+ perform set_config('request.jwt.claims','{"sub":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","role":"authenticated"}',false);
+ perform public.test_assert(not (public.get_fazaa_commercial_catalog()->>'enabled')::boolean,'revocation removes new booking access');
+ perform public.expect_error('select public.prepare_fazaa_quote(''{}'')','PRICING_NOT_READY');
+ perform public.test_assert(public.create_fazaa_request(q,'engine','0999999999')=r,'retry can retrieve existing booking after revocation');
+ perform public.test_assert(public.cancel_customer_request(r),'existing trip can still be cancelled');
+ perform public.test_assert((select not enabled from public.fazaa_fare_settings where id),'public pricing never activated');
+end $$;
+select 'PASS private trial access, admin-only grants, zero commission, revocation, privacy and unchanged public switch';
