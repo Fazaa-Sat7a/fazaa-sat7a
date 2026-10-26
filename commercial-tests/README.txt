@@ -1,0 +1,1 @@
+اختبارات معزولة فقط. لا ترفع محتويات fixture-web أو fixture-android إلى الموقع الفعلي من هنا. استخدم workflow/validate-commercial.yml لتشغيل الفحص. ملفات SQL المزيفة تتطلب قاعدة fazaa_commercial_test.
