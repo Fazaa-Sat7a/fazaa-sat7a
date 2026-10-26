@@ -1,46 +1,69 @@
 name: Build Fazaa Driver APK
-
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - 'android/**'
+      - 'ci/driver_signing.py'
       - '.github/workflows/android-apk.yml'
-
 permissions:
   contents: read
-
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
+      - name: Test signing safeguards with a disposable key
+        run: python3 driver-signing-tests/signing_checks.py
+      - name: Restore and validate fixed driver signing identity
+        env:
+          FAZAA_DRIVER_KEYSTORE_BASE64: ${{ secrets.FAZAA_DRIVER_KEYSTORE_BASE64 }}
+          FAZAA_DRIVER_KEYSTORE_PASSWORD: ${{ secrets.FAZAA_DRIVER_KEYSTORE_PASSWORD }}
+          FAZAA_DRIVER_CERT_SHA256: ${{ secrets.FAZAA_DRIVER_CERT_SHA256 }}
+        run: python3 ci/driver_signing.py restore "$RUNNER_TEMP/fazaa-driver-signing"
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-
       - name: Install Android SDK
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-
-      - name: Build test APK
+      - name: Build signed driver release
         working-directory: android
-        run: gradle --no-daemon :app:assembleDebug :app:lintDebug
-
-      - name: Upload APK
+        env:
+          FAZAA_DRIVER_KEYSTORE_PASSWORD: ${{ secrets.FAZAA_DRIVER_KEYSTORE_PASSWORD }}
+        run: gradle --no-daemon -PfazaaVersionCode=$((1000 + GITHUB_RUN_NUMBER)) :app:assembleRelease :app:lintRelease
+      - name: Verify signed APK identity and package
+        env:
+          FAZAA_DRIVER_CERT_SHA256: ${{ secrets.FAZAA_DRIVER_CERT_SHA256 }}
+        run: >-
+          python3 ci/driver_signing.py verify-apk
+          android/app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$((1000 + GITHUB_RUN_NUMBER))"
+      - name: Prepare APK download
+        run: |
+          mkdir -p "$RUNNER_TEMP/fazaa-driver-apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/fazaa-driver-apk/fazaa-driver.apk"
+          cp "$RUNNER_TEMP/fazaa-driver-signing/driver-signing-cert.der" "$RUNNER_TEMP/fazaa-driver-apk/driver-signing-cert.der"
+          cd "$RUNNER_TEMP/fazaa-driver-apk"
+          sha256sum fazaa-driver.apk > SHA256SUMS.txt
+      - name: Upload signed driver APK
         uses: actions/upload-artifact@v4
         with:
-          name: fazaa-driver-test-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: fazaa-driver-signed-apk
+          path: ${{ runner.temp }}/fazaa-driver-apk/
           if-no-files-found: error
           retention-days: 30
+      - name: Remove runner-local signing material
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/fazaa-driver-signing"
