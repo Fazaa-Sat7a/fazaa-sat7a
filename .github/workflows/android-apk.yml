@@ -6,9 +6,13 @@ on:
     paths:
       - 'android/**'
       - 'ci/driver_signing.py'
+      - 'ci/publish_captain.py'
       - '.github/workflows/android-apk.yml'
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: fazaa-captain-release
+  cancel-in-progress: false
 jobs:
   build:
     if: github.ref == 'refs/heads/main'
@@ -64,6 +68,13 @@ jobs:
           path: ${{ runner.temp }}/fazaa-driver-apk/
           if-no-files-found: error
           retention-days: 30
+      - name: Publish verified APK and in-app update metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 ci/publish_captain.py
+          --version-code "$((1000 + GITHUB_RUN_NUMBER))"
+          --apk android/app/build/outputs/apk/release/app-release.apk
       - name: Remove runner-local signing material
         if: always()
         run: rm -rf -- "$RUNNER_TEMP/fazaa-driver-signing"
