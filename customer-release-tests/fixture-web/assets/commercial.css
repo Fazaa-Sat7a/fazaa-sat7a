@@ -3,3 +3,4 @@
 .center-pick-map{position:relative}.center-pick-map::after{content:'📍';position:absolute;top:50%;left:50%;transform:translate(-50%,-100%);font-size:34px;z-index:3;pointer-events:none}
 
 .car-options{display:block}.commercial-box{min-width:0}.commercial-box input,.commercial-box select{min-width:0;max-width:100%;box-sizing:border-box}
+.commercial-admin-categories{display:flex;flex-wrap:wrap;gap:12px}.commercial-admin-categories label{display:flex;align-items:center;gap:8px}.commercial-admin-categories input{width:auto!important;min-height:20px}
