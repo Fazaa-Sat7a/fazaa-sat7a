@@ -5,13 +5,15 @@ const root=path.resolve(__dirname,'fixture-web');
 const ids={user:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',vehicle:'33333333-3333-4333-8333-333333333333',request:'44444444-4444-4444-8444-444444444444',quote:'55555555-5555-4555-8555-555555555555'};
 const mock=`(()=>{
  if(new URLSearchParams(location.search).has('saved'))localStorage.setItem('fazaa.customer.active.v0','44444444-4444-4444-8444-444444444444');
+ if(new URLSearchParams(location.search).has('guest'))localStorage.clear();
  window.__calls=[];window.__tripStatus='accepted';window.__total=210;window.__uid='${ids.user}';
  const user={id:window.__uid,email:'test@example.test',email_confirmed_at:'2026-01-01',is_anonymous:false,user_metadata:{display_name:'خليل اختبار'}};
+ if(new URLSearchParams(location.search).has('guest')){user.email=null;user.email_confirmed_at=null;user.is_anonymous=true;}
  const session={user,access_token:'TEST_TOKEN_'+ 'a'.repeat(40)};
  const regions=[{code:'damascus',name:'دمشق',enabled:true}];
  const vehicle={id:'${ids.vehicle}',make:'مركبة اختبار',model:'سيدان',car_type:'small',year_from:2010,year_to:2025};
  const classes=[{id:'test-class',name:'فئة سطحة اختبار',length_m:5,width_m:2.2,capacity_kg:2000,enabled:true}];
- const catalog={enabled:!new URLSearchParams(location.search).has('test_public'),trial_mode:!new URLSearchParams(location.search).has('test_public'),vehicles:[vehicle],matches:[false,true].map(enclosed=>({vehicle_id:vehicle.id,region_code:'damascus',enclosed,truck_name:enclosed?'سطحة مغلقة اختبار':'سطحة عادية اختبار',length_m:5}))};
+ const catalog={enabled:!new URLSearchParams(location.search).has('test_public'),trial_mode:!new URLSearchParams(location.search).has('test_public')&&!new URLSearchParams(location.search).has('guest'),vehicles:[vehicle],matches:[false,true].map(enclosed=>({vehicle_id:vehicle.id,region_code:'damascus',enclosed,truck_name:enclosed?'سطحة مغلقة اختبار':'سطحة عادية اختبار',length_m:5}))};
  const admin={settings:{enabled:false,commission_pct:0,currency_label:'ل.س — اختبار',credit_limit:null,settlement_days:7},classes,vehicles:[vehicle],regions,drivers:[],fleet:[],ledger:[],tariffs:[],zones:[]};
  const client={auth:{getSession:async()=>({data:{session},error:null}),getUser:async()=>({data:{user},error:null}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}),signInAnonymously:async()=>({data:{session},error:null}),signOut:async()=>({error:null})},rpc:async(name,args={})=>{
  window.__calls.push({name,args});let data;
@@ -86,6 +88,21 @@ const mock=`(()=>{
   if(state==='valid'){await page.click('#active-banner');await page.waitForSelector('#tracking:visible');}
  }
  await page.goto(base+'/?saved=valid');await page.waitForFunction(()=>window.FazaaCustomerReady);await page.evaluate(id=>window.FazaaApp.openRequest(id),ids.request);await page.waitForSelector('#tracking:visible');
+ // A fresh guest can complete the same destination and fixed-price flow.
+ await page.goto(base+'/?guest=1');await page.waitForFunction(()=>window.FazaaCustomerReady);await page.click('#nav-account');
+ assert.equal(await page.locator('#view-orders').isVisible(),false,'guest history hidden');
+ assert(await page.locator('#account-guest').isVisible());assert(await page.locator('#restore-section').isVisible(),'guest recovery remains available');
+ assert((await page.locator('.account-hero').innerText()).includes('التحديثات القادمة'));
+ await page.click('#nav-home');await page.click('#home-order');await page.locator('#problem-options button').first().click();
+ await page.click('[data-category=passenger]');await page.fill('#vehicle-name','سيارة الضيف');await page.fill('#phone','0999999999');await page.click('#details-next');await page.waitForSelector('#location-step:visible');
+ await page.evaluate(()=>{document.querySelector('#lat').value='33.5';document.querySelector('#lng').value='36.2';updateLocation();});
+ await page.getByRole('button',{name:'تحديد الموقع على الخريطة',exact:true}).click();await pick(33.6,36.3);
+ await page.getByRole('button',{name:'حساب السعر',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.fare-price')?.textContent.match(/210|٢١٠/));
+ await page.click('#submit');await page.waitForSelector('#tracking:visible');
+ assert(await page.evaluate(()=>window.__calls.some(x=>x.name==='create_fazaa_request')),'guest books fixed fare');
+ await page.evaluate(()=>{window.__tripStatus='done';refresh();});await page.waitForSelector('#rating-form:visible');
+ await page.getByRole('button',{name:'4 من 5 نجوم',exact:true}).click();await page.click('#rate');await page.waitForFunction(()=>window.__calls.some(x=>x.name==='rate_customer_request'));
+ await page.click('#nav-account');assert.equal(await page.locator('#view-orders').isVisible(),false,'guest completion does not unlock history');
  assert.deepEqual(errors,[]);console.log('PASS: real browser mobile booking, VIP year required, account/history merged, stale quote blocked, fixed fare booking, approved extension, private rating, admin zero commission defaults and no mobile overflow');
  }catch(error){
   if(page){
