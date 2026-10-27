@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>مسار فزعة</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.css" onerror="this.onerror=null;this.href='https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css'">
+<style>
+html,body{margin:0;height:100%;font-family:Tahoma,Arial,sans-serif;background:#edf0e9}#map{height:100%;direction:ltr}
+#note{position:absolute;top:12px;left:12px;right:12px;z-index:5;background:white;padding:10px;border-radius:10px;font-size:13px}
+.pin{display:grid;place-items:center;width:30px;height:30px;border:3px solid white;border-radius:50%;background:#277ad3;color:white;font-weight:bold;box-shadow:0 1px 5px #0005}.pin.driver{background:#ffb400;color:#1f2933}.pin.stale{background:#8a949a;color:white}
+#credits{position:absolute;bottom:0;left:0;right:0;z-index:4;padding:5px;background:#fffffff0;font:10px Arial;direction:ltr;text-align:center}#credits a{color:#283d58}
+</style></head><body><div id="map"></div><p id="note">جاري تحميل الخريطة…</p>
+<div id="credits"><a href="https://openrouteservice.org/">© openrouteservice.org by HeiGIT</a> | Map data <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a></div>
+<script>
+'use strict';let map,ready=false,pending={points:[],route:null},markers=[],fitted=false,routeStamp='';
+function valid(p){return p&&Number.isFinite(p.lat)&&Number.isFinite(p.lng)&&Math.abs(p.lat)<=90&&Math.abs(p.lng)<=180;}
+function geometry(r){const g=r&&r.geometry;return g&&g.type==='LineString'&&Array.isArray(g.coordinates)&&g.coordinates.length>=2&&g.coordinates.every(c=>Array.isArray(c)&&valid({lat:c[1],lng:c[0]}))?g:null;}
+window.setMapState=function(state){pending={points:Array.isArray(state&&state.points)?state.points.filter(valid):[],route:state&&state.route};render();};
+window.setPoints=function(points){window.setMapState({points,route:null});};
+function fitAll(){
+ if(!ready)return;const coords=pending.points.map(p=>[p.lng,p.lat]),g=geometry(pending.route);if(g)for(const c of g.coordinates)coords.push(c);
+ if(!coords.length)return;const bounds=new maplibregl.LngLatBounds();for(const c of coords)bounds.extend(c);map.fitBounds(bounds,{padding:{top:50,bottom:65,left:40,right:40},maxZoom:16,duration:0});fitted=true;
+}
+function render(){
+ if(!ready)return;
+ for(const pin of markers)pin.remove();markers=[];
+ for(const p of pending.points){const el=document.createElement('div');el.className='pin'+(p.driver?' driver':'')+(p.stale?' stale':'');el.textContent=p.driver?'س':p.delivery?'و':'ع';el.setAttribute('aria-label',p.driver?(p.stale?'موقع قديم للسائق':'موقع السائق'):(p.label||'الموقع المقصود'));markers.push(new maplibregl.Marker({element:el}).setLngLat([p.lng,p.lat]).addTo(map));}
+ const g=geometry(pending.route),stamp=g?String(pending.route.calculated_at||JSON.stringify(g.coordinates)):'';
+ if(stamp!==routeStamp){routeStamp=stamp;map.getSource('trip-route').setData({type:'FeatureCollection',features:g?[{type:'Feature',properties:{},geometry:g}]:[]});if(g)fitted=false;}
+ if(!fitted)fitAll();
+}
+function init(){
+ try{
+  map=new maplibregl.Map({container:'map',center:[36.2765,33.5138],zoom:12,maxZoom:19,dragRotate:false,pitchWithRotate:false,renderWorldCopies:false,style:{version:8,sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,maxzoom:19,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'}},layers:[{id:'osm',type:'raster',source:'osm'}]}});
+  map.addControl(new maplibregl.NavigationControl({showCompass:false}));
+  map.on('load',()=>{
+   map.addSource('trip-route',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+   map.addLayer({id:'trip-route-outline',type:'line',source:'trip-route',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#ffffff','line-width':9}});
+   map.addLayer({id:'trip-route-line',type:'line',source:'trip-route',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#277ad3','line-width':5}});
+   ready=true;document.getElementById('note').hidden=true;render();
+  });
+  map.on('error',()=>{document.getElementById('note').hidden=false;document.getElementById('note').textContent='تعذّر تحميل بعض أجزاء الخريطة. تأكّد من اتصال الإنترنت.';});
+ }catch{fail();}
+}
+function fail(){document.getElementById('note').textContent='تعذّر تحميل الخريطة. تأكّد من الإنترنت ثم افتح المسار مجدداً.';}
+function fallback(){const s=document.createElement('script');s.src='https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js';s.onload=init;s.onerror=fail;document.head.appendChild(s);}
+</script><script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.js" onload="init()" onerror="fallback()"></script></body></html>
