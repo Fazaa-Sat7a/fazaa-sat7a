@@ -35,7 +35,7 @@ import android.widget.Toast;
 /** Separate customer app. Hosted UI keeps the browser and app behavior aligned. */
 public final class ClientActivity extends Activity {
     private static final String ORIGIN = "https://fazaa-sat7a.github.io";
-    private static final String URL = ORIGIN + "/fazaa-sat7a/?app=1&v=050";
+    private static final String URL = ORIGIN + "/fazaa-sat7a/?app=1&v=051";
     private WebView web;
     private LinearLayout cover;
     private TextView message;
@@ -75,7 +75,7 @@ public final class ClientActivity extends Activity {
         settings.setSafeBrowsingEnabled(true);
         settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.5.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.5.1");
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         frame.addView(web, new FrameLayout.LayoutParams(-1,-1));
 
@@ -85,18 +85,11 @@ public final class ClientActivity extends Activity {
         cover.setPadding(dp(26),dp(26),dp(26),dp(26));
         cover.setBackgroundColor(Color.rgb(244,246,250));
         boolean arabic = getResources().getConfiguration().getLocales().get(0).getLanguage().equals("ar");
-        if (arabic) {
-            android.widget.ImageView wordmark = new android.widget.ImageView(this);
-            wordmark.setImageResource(R.drawable.fazaa_wordmark_ar);
-            wordmark.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-            wordmark.setContentDescription("فزعة");
-            cover.addView(wordmark, new LinearLayout.LayoutParams(dp(240), dp(110)));
-        } else {
-            TextView title = new TextView(this);
-            title.setText("FAZAA"); title.setTextSize(42); title.setTextColor(Color.rgb(19,36,60));
-            title.setTypeface(null, Typeface.BOLD); title.setGravity(Gravity.CENTER);
-            cover.addView(title, new LinearLayout.LayoutParams(-1, dp(100)));
-        }
+        android.widget.ImageView wordmark = new android.widget.ImageView(this);
+        wordmark.setImageResource(arabic ? R.drawable.fazaa_wordmark_ar : R.drawable.fazaa_wordmark_en);
+        wordmark.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        wordmark.setContentDescription(arabic ? "فزعة" : "FAZAA");
+        cover.addView(wordmark, new LinearLayout.LayoutParams(dp(240), dp(110)));
         splash=new TowSplashView(this);
         cover.addView(splash,new LinearLayout.LayoutParams(-1,dp(185)));
         message = new TextView(this);
