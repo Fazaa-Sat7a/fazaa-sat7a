@@ -35,7 +35,7 @@ import android.widget.Toast;
 /** Separate customer app. Hosted UI keeps the browser and app behavior aligned. */
 public final class ClientActivity extends Activity {
     private static final String ORIGIN = "https://fazaa-sat7a.github.io";
-    private static final String URL = ORIGIN + "/fazaa-sat7a/?app=1&v=040";
+    private static final String URL = ORIGIN + "/fazaa-sat7a/?app=1&v=050";
     private WebView web;
     private LinearLayout cover;
     private TextView message;
@@ -58,13 +58,13 @@ public final class ClientActivity extends Activity {
         notificationRequest=PushStore.requestId(getIntent().getStringExtra("request_id"));
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.rgb(247,246,242));
+        root.setBackgroundColor(Color.rgb(244,246,250));
         root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         notificationBanner = new LinearLayout(this);
         FrameLayout frame = new FrameLayout(this);
         root.addView(frame, new LinearLayout.LayoutParams(-1, 0, 1));
         web = new WebView(this);
-        web.setBackgroundColor(Color.rgb(247,246,242));
+        web.setBackgroundColor(Color.rgb(244,246,250));
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -75,7 +75,7 @@ public final class ClientActivity extends Activity {
         settings.setSafeBrowsingEnabled(true);
         settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.4.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.5.0");
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         frame.addView(web, new FrameLayout.LayoutParams(-1,-1));
 
@@ -83,12 +83,22 @@ public final class ClientActivity extends Activity {
         cover.setOrientation(LinearLayout.VERTICAL);
         cover.setGravity(Gravity.CENTER);
         cover.setPadding(dp(26),dp(26),dp(26),dp(26));
-        cover.setBackgroundColor(Color.rgb(247,246,242));
+        cover.setBackgroundColor(Color.rgb(244,246,250));
+        boolean arabic = getResources().getConfiguration().getLocales().get(0).getLanguage().equals("ar");
+        if (arabic) {
+            android.widget.ImageView wordmark = new android.widget.ImageView(this);
+            wordmark.setImageResource(R.drawable.fazaa_wordmark_ar);
+            wordmark.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+            wordmark.setContentDescription("فزعة");
+            cover.addView(wordmark, new LinearLayout.LayoutParams(dp(240), dp(110)));
+        } else {
+            TextView title = new TextView(this);
+            title.setText("FAZAA"); title.setTextSize(42); title.setTextColor(Color.rgb(19,36,60));
+            title.setTypeface(null, Typeface.BOLD); title.setGravity(Gravity.CENTER);
+            cover.addView(title, new LinearLayout.LayoutParams(-1, dp(100)));
+        }
         splash=new TowSplashView(this);
         cover.addView(splash,new LinearLayout.LayoutParams(-1,dp(185)));
-        TextView title = new TextView(this);
-        title.setText("فزعة"); title.setTextSize(32); title.setTextColor(Color.rgb(31,41,51)); title.setTypeface(null, Typeface.BOLD);
-        cover.addView(title);
         message = new TextView(this);
         message.setTextSize(16); message.setGravity(Gravity.CENTER); message.setPadding(0,dp(12),0,dp(12));
         message.setTextColor(Color.rgb(65,77,85));

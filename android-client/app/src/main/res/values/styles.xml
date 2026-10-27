@@ -1,12 +1,12 @@
 <resources>
-    <color name="brand_yellow">#FFB400</color>
+    <color name="brand_yellow">#FFC21C</color>
     <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#B07800</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:statusBarColor">#1F2933</item>
-        <item name="android:navigationBarColor">#1F2933</item>
+        <item name="android:statusBarColor">#13243C</item>
+        <item name="android:navigationBarColor">#13243C</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowBackground">#F7F6F2</item>
+        <item name="android:windowBackground">#F4F6FA</item>
     </style>
 </resources>
