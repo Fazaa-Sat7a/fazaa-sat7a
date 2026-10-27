@@ -1,0 +1,23 @@
+'use strict';
+(()=>{
+ const E=id=>document.getElementById(id);
+ const categories=[['passenger','سيارة ركوب','سيدان، هاتشباك أو ستيشن','small'],['crossover','كروس أوفر','SUV متوسطة','suv'],['suv_large','SUV كبيرة','مركبة عائلية كبيرة','suv'],['low_clearance','رياضية أو منخفضة','تحتاج عناية عند التحميل','small'],['pickup','بيك أب','مثل فئة F-150','truck'],['van','فان / ميني فان','مركبات الركاب العائلية','truck']];
+ const node=(tag,cls='',text)=>{const n=document.createElement(tag);n.className=cls;if(text!==undefined)n.textContent=text;return n;};
+ const host=E('car-options');host.className='vehicle-picker';host.replaceChildren();
+ const grid=node('div','vehicle-category-grid');host.append(grid);let selected=null;
+ function change(){E('car-type').value=selected?.[3]||'';window.dispatchEvent(new Event('fazaa-vehicle-change'));}
+ for(const c of categories){const b=node('button','vehicle-category');b.type='button';b.dataset.category=c[0];b.setAttribute('aria-pressed','false');const mark=document.createElementNS('http://www.w3.org/2000/svg','svg');mark.setAttribute('viewBox','0 0 64 32');mark.setAttribute('aria-hidden','true');const paths={passenger:'M6 21h52l-3-9-11-2-8-7H22l-9 9-7 3Z',crossover:'M5 22h54l-4-11-10-2-7-8H18L9 12H5Z',suv_large:'M4 23h56V12l-9-2-7-9H13L7 11H4Z',low_clearance:'M4 24h56l-4-7-15-3-9-7H21l-9 10-8 2Z',pickup:'M3 23h58V12l-8-1-6-9H31v12H3Z',van:'M4 23h56V12L48 2H10L4 9Z'};mark.innerHTML='<path d="'+paths[c[0]]+'"/><circle cx="16" cy="24" r="5"/><circle cx="49" cy="24" r="5"/>';b.append(mark,node('strong','',c[1]),node('small','',c[2]));b.addEventListener('click',()=>{selected=c;for(const el of grid.querySelectorAll('button')){el.classList.toggle('selected',el===b);el.setAttribute('aria-pressed',String(el===b));}status.textContent='';change();});grid.append(b);}
+ const soon=node('button','vehicle-category vehicle-soon');soon.type='button';soon.disabled=true;soon.append(node('strong','','الشاحنات الكبيرة'),node('small','','قريباً'));grid.append(soon);
+ const description=node('input');description.id='vehicle-name';description.maxLength=100;description.placeholder='مثلاً: تويوتا كورولا';description.autocomplete='off';
+ const service=node('select');service.id='truck-service';service.append(new Option('سطحة عادية','standard'),new Option('سطحة مغلقة / VIP','enclosed'));
+ const year=node('input');year.id='vehicle-year';year.type='number';year.inputMode='numeric';year.min='1900';year.max=String(new Date().getFullYear()+1);year.placeholder='مثلاً 2020';
+ function label(text,input){const l=node('label','',text);l.htmlFor=input.id;host.append(l,input);return l;}
+ label('اسم السيارة / الموديل',description);host.append(node('p','vehicle-hint','للتعريف بسيارتك للسائق. لا يحتاج الموديل إلى موافقة مسبقة.'));label('نوع السطحة',service);const yearLabel=label('سنة الصنع — مطلوبة للمغلقة',year);
+ const status=node('p','fare-status');status.id='vehicle-status';status.setAttribute('role','status');host.append(status);
+ function syncService(){year.hidden=yearLabel.hidden=service.value!=='enclosed';year.required=!year.hidden;if(year.hidden)year.value='';change();}
+ service.addEventListener('change',syncService);for(const input of [description,year])input.addEventListener('input',change);
+ window.FazaaVehicle={get selected(){return selected;},get summary(){return selected?[selected[1],description.value.trim()].filter(Boolean).join(' — '):'';},payload(){return {category_code:selected?.[0]||'',vehicle_name:description.value.trim(),enclosed:service.value==='enclosed',vehicle_year:year.value?Number(year.value):null};},validate(){let error='';if(!selected)error='اختر فئة مركبتك أولاً.';else if(description.value.trim().length<2)error='اكتب اسم السيارة أو الموديل للتعريف بها للسائق.';else if(service.value==='enclosed'&&(!year.value||!Number.isInteger(Number(year.value))||Number(year.value)<1900||Number(year.value)>new Date().getFullYear()+1))error='أدخل سنة صنع صحيحة للسطحة المغلقة.';status.textContent=error;return !error;}};
+ const previous=rpc;rpc=async function(name,args){if(name==='create_request'){if(!window.FazaaVehicle.validate())throw Error('أكمل بيانات المركبة.');const v=window.FazaaVehicle.payload();return previous('create_fazaa_category_request',{p_lat:args.p_lat,p_lng:args.p_lng,p_problem:args.p_problem,p_phone:args.p_phone,p_category:v.category_code,p_vehicle_name:v.vehicle_name,p_region_code:window.FazaaApp.regionCode||localStorage.getItem('fazaa.customer.region.v1')||'damascus',p_enclosed:v.enclosed,p_year:v.vehicle_year,p_note:args.p_note});}return previous(name,args);};
+ const oldError=errorText;errorText=e=>String(e?.message||e).includes('NO_MATCHING_TRUCK')?'لا تتوفر سطحة معتمدة لهذه الفئة ونوع الخدمة في المحافظة حالياً.':oldError(e);
+ syncService();
+})();

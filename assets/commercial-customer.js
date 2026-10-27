@@ -7,26 +7,18 @@
  function node(tag,cls='',text){const n=document.createElement(tag);n.className=cls;if(text!==undefined)n.textContent=text;return n;}
  function button(text,action,cls='secondary'){const b=node('button',cls,text);b.type='button';b.addEventListener('click',action);return b;}
  let catalog=null,quote=null,quoteOwner=null,quoteKey='',version=0,calculateTimer,expiryTimer,stops=[{label:'',point:null,unload:false}],pickerTarget=null,pickerPoint=null,extensionInput=null;
- const codes={PRICING_NOT_READY:'التسعير قيد الإعداد. يرجى المحاولة بعد تفعيل الخدمة.',ROUTER_NOT_CONFIGURED:'حساب الطريق قيد الإعداد. لا يمكن تأكيد سعر حالياً.',ROUTE_UNAVAILABLE:'تعذّر حساب طريق مناسب. راجع الموقعين أو حاول مجدداً.',VEHICLE_NOT_APPROVED:'اختر مركبة معتمدة من القائمة.',VEHICLE_YEAR_REQUIRED:'أدخل سنة صنع المركبة ضمن السنوات المعتمدة لهذا الموديل.',OUTSIDE_SERVICE_AREA:'موقع السيارة خارج نطاق الخدمة المحدد لهذه المحافظة.',NO_MATCHING_TRUCK:'لا تتوفر فئة سطحة معتمدة ومناسبة لهذا الاختيار حالياً.',QUOTE_EXPIRED:'انتهت صلاحية السعر أو تغيّرت البيانات. أعد حسابه قبل التأكيد.',QUOTE_RATE_LIMIT:'طلبات حساب كثيرة. انتظر قليلاً ثم حاول مجدداً.',PAYMENT_NOT_AVAILABLE:'هذه الطريقة غير مفعلة بعد. يمكنك اختيار الكاش.',FIXED_QUOTE_REQUIRED:'احسب السعر وثبّته قبل إرسال الطلب.',TRUCK_OR_CREDIT_NOT_ELIGIBLE:'تعذّر إسناد الطلب لهذه السطحة.',CHANGE_NOT_ALLOWED:'إضافة وجهة غير متاحة في حالة الطلب الحالية.'};
+ const codes={PRICING_NOT_READY:'التسعير قيد الإعداد. يرجى المحاولة بعد تفعيل الخدمة.',ROUTER_NOT_CONFIGURED:'حساب الطريق قيد الإعداد. لا يمكن تأكيد سعر حالياً.',ROUTE_UNAVAILABLE:'تعذّر حساب طريق مناسب. راجع الموقعين أو حاول مجدداً.',VEHICLE_NOT_APPROVED:'اختر فئة المركبة.',VEHICLE_YEAR_REQUIRED:'أدخل سنة صنع المركبة بشكل صحيح.',OUTSIDE_SERVICE_AREA:'موقع السيارة خارج نطاق الخدمة المحدد لهذه المحافظة.',NO_MATCHING_TRUCK:'لا تتوفر فئة سطحة معتمدة ومناسبة لهذا الاختيار حالياً.',QUOTE_EXPIRED:'انتهت صلاحية السعر أو تغيّرت البيانات. أعد حسابه قبل التأكيد.',QUOTE_RATE_LIMIT:'طلبات حساب كثيرة. انتظر قليلاً ثم حاول مجدداً.',PAYMENT_NOT_AVAILABLE:'هذه الطريقة غير مفعلة بعد. يمكنك اختيار الكاش.',FIXED_QUOTE_REQUIRED:'احسب السعر وثبّته قبل إرسال الطلب.',TRUCK_OR_CREDIT_NOT_ELIGIBLE:'تعذّر إسناد الطلب لهذه السطحة.',CHANGE_NOT_ALLOWED:'إضافة وجهة غير متاحة في حالة الطلب الحالية.'};
  const oldError=errorText;errorText=e=>Object.entries(codes).find(([key])=>String(e?.message||e).includes(key))?.[1]||oldError(e);
  // One account destination contains profile, history, restore and notification settings.
  const history=E('view-orders');history.classList.remove('app-view');E('view-account').append(history);
  E('nav-orders').remove();document.querySelector('#account-profile [data-go="orders"]')?.remove();
- const modelBox=node('div','commercial-box');modelBox.append(node('h3','','مركبتك والسطحة المناسبة'));
- const modelLabel=node('label','','ماركة المركبة وموديلها');modelLabel.htmlFor='vehicle-model';
- const select=node('select');select.id='vehicle-model';select.append(new Option('جاري تحميل المركبات المعتمدة…',''));
- const enclosed=node('select');enclosed.id='truck-service';enclosed.append(new Option('سطحة عادية','standard'),new Option('سطحة مغلقة / VIP','enclosed'));
- const typeLabel=node('label','','نوع الخدمة');typeLabel.htmlFor=enclosed.id;
- const yearLabel=node('label','','سنة صنع المركبة');yearLabel.htmlFor='vehicle-year';
- const year=node('input');year.id='vehicle-year';year.type='number';year.inputMode='numeric';year.placeholder='مثلاً 2020';year.min='1900';year.max='2200';
- const modelMessage=node('p','fare-status');modelBox.append(modelLabel,select,typeLabel,enclosed,yearLabel,year,modelMessage);
- E('car-options').replaceChildren(modelBox);
- function match(){return catalog?.matches?.find(m=>m.vehicle_id===select.value&&m.region_code===app.regionCode&&m.enclosed===(enclosed.value==='enclosed'));}
- function selectedModel(){return catalog?.vehicles.find(v=>v.id===select.value);}
- function validateVehicle(){const v=selectedModel();let text='';if(!catalog?.enabled)text=codes.PRICING_NOT_READY;else if(!v)text='اختر ماركة المركبة وموديلها من القائمة. إذا لم تجدها، يلزم اعتماد مواصفاتها قبل الحجز.';else if(enclosed.value==='enclosed'&&(!year.value||Number(year.value)<v.year_from||Number(year.value)>v.year_to))text=codes.VEHICLE_YEAR_REQUIRED;modelMessage.textContent=text|| (match()?'الفئة المناسبة: '+match().truck_name+' · طول السطح '+match().length_m+' م':'لا توجد فئة مناسبة مفعلة لهذا الاختيار حالياً.');if(v)E('car-type').value=v.car_type;return !text;}
+ const vehicle=window.FazaaVehicle,modelMessage=E('vehicle-status');
+ function match(){return catalog?.matches?.find(m=>m.category_code===vehicle.payload().category_code&&m.region_code===app.regionCode&&m.enclosed===vehicle.payload().enclosed);}
+ function selectedModel(){return vehicle.selected;}
+ function validateVehicle(){if(!vehicle.validate())return false;let text='';if(!catalog?.enabled)text=codes.PRICING_NOT_READY;else if(!match())text=codes.NO_MATCHING_TRUCK;modelMessage.textContent=text||'السطحة المناسبة: '+match().truck_name;return !text;}
  window.FazaaCommercial={validateVehicle};
- function syncVehicle(){year.hidden=yearLabel.hidden=enclosed.value!=='enclosed';if(year.hidden)year.value='';const v=selectedModel();E('car-type').value=v?.car_type||'';modelMessage.textContent=v?(match()?'الفئة المناسبة: '+match().truck_name+' · طول السطح '+match().length_m+' م':'لا توجد فئة مناسبة مفعلة لهذا الاختيار حالياً.'):'';invalidate();}
- for(const input of [select,enclosed,year])input.addEventListener('change',syncVehicle);
+ function syncVehicle(){modelMessage.textContent=selectedModel()?(match()?'السطحة المناسبة: '+match().truck_name:codes.NO_MATCHING_TRUCK):'';invalidate();}
+ window.addEventListener('fazaa-vehicle-change',syncVehicle);
  const destinationBox=node('section','commercial-box');destinationBox.append(node('h2','','إلى وين بدك تنقل السيارة؟'),node('p','commercial-muted','اختر وجهتك، وأضف محطات أخرى إذا كانت معروفة. السعر يشمل المسار المتفق عليه.'));
  const stopList=node('div');destinationBox.append(stopList,button('＋ إضافة وجهة أخرى',()=>{if(stops.length<4){stops.push({label:'',point:null,unload:false});paintStops();invalidate();}}));
  const payment=node('div','commercial-box');payment.append(node('h3','','طريقة الدفع'));
@@ -42,7 +34,7 @@
  routeCredit.append(orsCredit,document.createTextNode(' | '),osmCredit);quoteBox.append(routeCredit);
  E('submit').before(destinationBox,payment,quoteBox);
  E('submit').textContent='تأكيد الحجز بالسعر الموضح';
- function payload(){const p=coordinates();return {region_code:app.regionCode||localStorage.getItem('fazaa.customer.region.v1')||'damascus',vehicle_id:select.value,enclosed:enclosed.value==='enclosed',vehicle_year:year.value?Number(year.value):null,pickup:p,stops:stops.map(s=>({...s.point,label:s.label||'وجهة',unload:s.unload}))};}
+ function payload(){const p=coordinates();return {region_code:app.regionCode||localStorage.getItem('fazaa.customer.region.v1')||'damascus',...vehicle.payload(),pickup:p,stops:stops.map(s=>({...s.point,label:s.label||'وجهة',unload:s.unload}))};}
  function key(){return JSON.stringify(payload());}
  function invalidate(){version++;quote=null;quoteOwner=null;quoteKey='';clearTimeout(calculateTimer);clearTimeout(expiryTimer);price.textContent='—';quoteDetails.textContent='';quoteStatus.textContent='حدّد المركبة وموقع السيارة والوجهات لحساب السعر.';if(catalog?.enabled&&selectedModel()&&coordinates()&&stops.every(s=>s.point))calculateTimer=setTimeout(()=>computeQuote(),1200);}
  function paintStops(){stopList.replaceChildren();stops.forEach((s,index)=>{const row=node('div','fare-stop');row.append(node('strong','',index===stops.length-1?'الوجهة النهائية':'المحطة '+(index+1)));const name=node('input');name.placeholder='اسم الكراج أو وصف الوجهة';name.maxLength=120;name.value=s.label;name.setAttribute('aria-label','اسم الوجهة '+(index+1));name.addEventListener('input',()=>{s.label=name.value;invalidate();});row.append(name,node('p','commercial-muted',s.point?s.point.lat.toFixed(5)+'، '+s.point.lng.toFixed(5):'لم يُحدد الموقع بعد.'),button(s.point?'تعديل الموقع على الخريطة':'تحديد الموقع على الخريطة',()=>openPicker(p=>{s.point=p;paintStops();invalidate();},s.point)));
@@ -79,5 +71,5 @@
  const nativeLink=node('a','native-notification-link','إعدادات إشعارات الطلب');nativeLink.href='./?app=1&native=notifications';nativeLink.hidden=!new URLSearchParams(location.search).has('app');E('view-account').insertBefore(nativeLink,history);
  new MutationObserver(()=>invalidate()).observe(E('region-label'),{childList:true,subtree:true});
  syncVehicle();paintStops();
- (async()=>{try{const result=await client.rpc('get_fazaa_commercial_catalog',{});if(result.error)throw result.error;catalog=result.data;if(catalog.trial_mode){const badge=node('p','info-note','تجربة خاصة — أسعار ومواصفات للاختبار فقط، وليست خدمة نقل فعلية.');E('view-request').prepend(badge);}select.replaceChildren(new Option('اختر ماركة المركبة وموديلها',''));for(const v of catalog.vehicles)select.append(new Option(v.make+' — '+v.model,v.id));modelMessage.textContent=catalog.enabled?'':'التسعير قيد الإعداد. ستظهر المركبات بعد اعتماد مواصفاتها.';}catch{select.replaceChildren(new Option('قائمة المركبات غير متاحة حالياً',''));modelMessage.textContent='يلزم تفعيل تحديث التسعير في قاعدة البيانات.';}})();
+ (async()=>{try{const [result,categories]=await Promise.all([client.rpc('get_fazaa_commercial_catalog',{}),client.rpc('get_fazaa_category_catalog',{})]);if(result.error||categories.error)throw result.error||categories.error;catalog={...result.data,matches:categories.data.matches};if(catalog.trial_mode){const badge=node('p','info-note','تجربة خاصة — أسعار للاختبار فقط، وليست خدمة نقل فعلية.');E('view-request').prepend(badge);}syncVehicle();}catch{modelMessage.textContent='تعذّر تحميل فئات السطحات. تأكد من الاتصال وتفعيل تحديث قاعدة البيانات.';}})();
 })();
