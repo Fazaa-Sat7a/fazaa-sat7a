@@ -3,8 +3,8 @@ plugins { id 'com.android.application' }
 def signingFile = System.getenv('FAZAA_DRIVER_KEYSTORE_FILE')
 def signingPassword = System.getenv('FAZAA_DRIVER_KEYSTORE_PASSWORD')
 def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
-def requestedCode = (project.findProperty('fazaaVersionCode') ?: '10').toString()
-if (!(requestedCode ==~ /[0-9]+/) || requestedCode.toLong() < 10 || requestedCode.toLong() > 2100000000L) {
+def requestedCode = (project.findProperty('fazaaVersionCode') ?: '11').toString()
+if (!(requestedCode ==~ /[0-9]+/) || requestedCode.toLong() < 11 || requestedCode.toLong() > 2100000000L) {
     throw new GradleException('Invalid driver version code')
 }
 if (releaseRequested && (!signingFile || !signingPassword || !file(signingFile).isFile())) {
@@ -18,7 +18,7 @@ android {
         minSdk 26
         targetSdk 35
         versionCode requestedCode.toInteger()
-        versionName '0.2.7'
+        versionName '0.3.0'
     }
     signingConfigs {
         driverRelease {

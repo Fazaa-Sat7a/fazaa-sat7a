@@ -7,12 +7,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <application android:name=".DriverApp" android:label="فزعة — السائق (تجربة)" android:theme="@style/AppTheme" android:icon="@drawable/ic_truck" android:allowBackup="false" android:usesCleartextTraffic="false" android:supportsRtl="true">
+    <application android:name=".DriverApp" android:label="@string/app_name" android:theme="@style/AppTheme" android:icon="@mipmap/captain_launcher" android:roundIcon="@mipmap/captain_launcher" android:allowBackup="false" android:usesCleartextTraffic="false" android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         <activity android:name=".MapActivity" android:exported="false" />
-        <activity android:name=".AdminActivity" android:exported="false" />
         <service android:name=".DriverService" android:exported="false" android:foregroundServiceType="location" android:stopWithTask="false" />
     </application>
 </manifest>

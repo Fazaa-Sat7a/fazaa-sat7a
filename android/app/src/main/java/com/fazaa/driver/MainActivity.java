@@ -31,7 +31,7 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 public final class MainActivity extends Activity {
-    private static final int INK = Color.rgb(31, 41, 51), YELLOW = Color.rgb(255, 180, 0), PAPER = Color.rgb(247, 246, 242);
+    private static final int INK = Color.rgb(19, 36, 60), YELLOW = Color.rgb(255, 194, 28), PAPER = Color.rgb(244, 246, 250);
     private final Handler handler = new Handler(Looper.getMainLooper());
     private DriverApp app;
     private ScrollView scroll;
@@ -43,6 +43,8 @@ public final class MainActivity extends Activity {
     private boolean lastBusy;
     private DriverService lastService;
     private String screen = "";
+    private CaptainUpdates captainUpdates;
+    private boolean automaticUpdateChecked;
     private final Runnable updates = new Runnable() {
         @Override public void run() { render(); handler.postDelayed(this, 750); }
     };
@@ -50,6 +52,7 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         app = (DriverApp) getApplication();
+        captainUpdates = new CaptainUpdates(this, () -> app.visible && app.snapshot.current == null);
         scroll = new ScrollView(this);
         scroll.setBackgroundColor(PAPER);
         scroll.setFillViewport(true);
@@ -66,18 +69,22 @@ public final class MainActivity extends Activity {
         scroll.requestApplyInsets();
     }
 
-    @Override protected void onResume() { super.onResume(); app.visible = true; app.refresh(); handler.post(updates); }
+    @Override protected void onResume() { super.onResume(); automaticUpdateChecked=false; app.visible = true; app.refresh(); handler.post(updates); }
     @Override protected void onPause() { handler.removeCallbacks(updates); app.visible = false; super.onPause(); }
 
+    @Override protected void onDestroy() { handler.removeCallbacks(updates); captainUpdates.close(); super.onDestroy(); }
+
     private void render() {
-        if (!app.ready) { if (!screen.equals("loading")) { root.removeAllViews(); label(root, "جاري فتح فزعة…", 24, true); screen = "loading"; } return; }
+        if (!app.ready) { if (!screen.equals("loading")) { root.removeAllViews(); brandHeader(); TowSplashView animation=new TowSplashView(this);root.addView(animation,new LinearLayout.LayoutParams(-1,dp(190)));label(root,"جاري فتح فزعة كابتن…",16,false);screen = "loading"; } return; }
         DriverApp.Snapshot state = app.snapshot;
+        if(!automaticUpdateChecked && state.current==null){automaticUpdateChecked=true;captainUpdates.check(false);}
+        if(state.current!=null)captainUpdates.hideDuringTrip();
         boolean logged = app.api.signedIn() && state.profile != null;
         if (!logged) {
             if (!screen.equals("login")) showLogin();
             loginMessage.setText(state.message);
             loginButton.setEnabled(!app.busy);
-            loginButton.setText(app.busy ? "جاري الدخول…" : "دخول السائق");
+            loginButton.setText(app.busy ? "جاري الدخول…" : "دخول الكابتن");
             return;
         }
         if (screen.equals("dashboard") && lastSnapshot == state && lastBusy == app.busy && lastService == app.service) return;
@@ -86,8 +93,7 @@ public final class MainActivity extends Activity {
         int position=priorTrip.equals(nextTrip)?scroll.getScrollY():0;
         screen = "dashboard"; lastSnapshot = state; lastBusy = app.busy; lastService = app.service;
         root.removeAllViews();
-        label(root, "فزعة — السائق", 27, true);
-        label(root, "فزعة · التسعير الثابت وعمولة الإطلاق", 13, false);
+        brandHeader();
         if(state.current==null){
         LinearLayout driver = card();
         label(driver, state.profile.optString("name", "السائق"), 22, true);
@@ -124,6 +130,7 @@ public final class MainActivity extends Activity {
             }
         }
         if(state.current==null){
+        button(root,"التحقق من تحديث التطبيق",()->captainUpdates.check(true),true);
         button(root, "تسجيل الخروج", () -> confirm("تسجيل الخروج؟", "سيُوقف استقبال الطلبات على هذا الهاتف.", app::logout), !app.busy && state.current == null);
         label(root, "التنبيهات تعتمد على اتصال الإنترنت وتشغيل الاستقبال. الكتم ووضع عدم الإزعاج وإيقاف التطبيق من النظام قد يمنعان التنبيه.", 12, false);
         }else button(root,"تحديث الحالة",app::refresh,!app.busy);
@@ -133,7 +140,7 @@ public final class MainActivity extends Activity {
     private void showLogin() {
         screen = "login";
         root.removeAllViews();
-        label(root, "فزعة — السائق", 30, true);
+        brandHeader();
         LinearLayout form = card();
         label(form, "جاهز للفزعة؟", 27, true);
         label(form, "استخدم حساب السائق الحالي الذي أنشأه المدير.", 15, false);
@@ -141,17 +148,24 @@ public final class MainActivity extends Activity {
         email = new EditText(this); email.setSingleLine(true); email.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS); email.setTextDirection(View.TEXT_DIRECTION_LTR); email.setHint("driver@example.com"); form.addView(email);
         label(form, "كلمة المرور", 14, true);
         password = new EditText(this); password.setSingleLine(true); password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD); password.setTextDirection(View.TEXT_DIRECTION_LTR); password.setSaveEnabled(false); form.addView(password);
-        loginButton = button(form, "دخول السائق", () -> {
+        loginButton = primaryButton(form, "دخول الكابتن", () -> {
             String address = email.getText().toString().trim(), secret = password.getText().toString();
             if (address.isEmpty() || secret.isEmpty()) { toast("أدخل البريد وكلمة المرور."); return; }
             password.setText(""); app.login(address, secret);
         }, true);
         loginMessage = label(form, "", 14, false);
-        button(root, "لوحة المدير", this::openAdmin, true);
+        button(root,"التحقق من تحديث التطبيق",()->captainUpdates.check(true),true);
         label(root, "جلسة الدخول محفوظة مشفّرة على هذا الهاتف. لا تستخدم حساب المدير هنا.", 13, false);
     }
 
-    private void openAdmin() { startActivity(new Intent(this, AdminActivity.class)); }
+    private void brandHeader(){
+        LinearLayout brand=new LinearLayout(this);brand.setOrientation(LinearLayout.HORIZONTAL);brand.setGravity(Gravity.CENTER_VERTICAL);brand.setPadding(dp(16),dp(12),dp(16),dp(12));
+        GradientDrawable bg=new GradientDrawable();bg.setColor(INK);bg.setCornerRadius(dp(22));brand.setBackground(bg);
+        android.widget.ImageView mark=new android.widget.ImageView(this);mark.setImageResource(R.drawable.captain_mark);mark.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);mark.setContentDescription(getString(R.string.app_name));brand.addView(mark,new LinearLayout.LayoutParams(dp(100),dp(88)));
+        LinearLayout copy=new LinearLayout(this);copy.setOrientation(LinearLayout.VERTICAL);brand.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
+        TextView name=label(copy,getString(R.string.app_name),22,true);name.setTextColor(Color.WHITE);label(copy,"جاهز تفزع؟",14,false).setTextColor(YELLOW);
+        root.addView(brand,new LinearLayout.LayoutParams(-1,-2));
+    }
 
     private void showOffer(JSONObject offer, long syncedAt) {
         LinearLayout card = card();
@@ -196,6 +210,11 @@ public final class MainActivity extends Activity {
         if(fare==null){label(card,"بيانات الأجرة غير متاحة. حدّث الحالة قبل قبول الطلب.",14,true);return;}
         if(!fare.optBoolean("priced")){label(card,"طلب سابق لنظام التسعير الثابت.",14,false);return;}
         String currency=fare.optString("currency_label","");
+        String category=DriverDisplay.text(fare.opt("category_label"),"");
+        if(!category.isEmpty())label(card,"فئة المركبة: "+category,15,true);
+        if(fare.has("enclosed")&&!fare.isNull("enclosed"))label(card,fare.optBoolean("enclosed")?"الخدمة: سطحة مغلقة / VIP":"الخدمة: سطحة عادية",15,false);
+        if(fare.has("vehicle_year")&&!fare.isNull("vehicle_year"))label(card,"سنة الصنع: "+fare.optString("vehicle_year"),15,false);
+        label(card,"الدفع: كاش من العميل",14,true);
         label(card,"الأجرة الشاملة: "+fare.optString("total")+" "+currency,22,true);
         label(card,fare.optString("vehicle_name")+" · "+fare.optString("truck_name"),15,false);
         double pct=fare.optDouble("commission_pct",0),total=fare.optDouble("total",0),commission=fare.optDouble("commission",0);
@@ -300,14 +319,14 @@ public final class MainActivity extends Activity {
     }
     private Button primaryButton(LinearLayout parent,String text,Runnable action,boolean enabled){
         Button view=button(parent,text,action,enabled);
-        view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(21,128,61)));view.setTextColor(Color.WHITE);
+        view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(YELLOW));view.setTextColor(INK);view.setTypeface(null,Typeface.BOLD);view.setMinHeight(dp(58));
         return view;
     }
     private Button button(LinearLayout parent, String text, Runnable action, boolean enabled) {
         Button view = new Button(this); view.setText(text); view.setTextSize(15); view.setTextColor(INK); view.setAllCaps(false); view.setMinHeight(dp(50));
-        GradientDrawable background = new GradientDrawable(); background.setColor(YELLOW); background.setCornerRadius(dp(12)); view.setBackground(background); view.setPadding(dp(10), dp(10), dp(10), dp(10)); view.setEnabled(enabled); view.setAlpha(enabled ? 1f : .5f);
+        GradientDrawable background = new GradientDrawable(); background.setColor(Color.rgb(232,237,244)); background.setCornerRadius(dp(14)); view.setBackground(background); view.setPadding(dp(10), dp(10), dp(10), dp(10)); view.setEnabled(enabled); view.setAlpha(enabled ? 1f : .5f);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); params.setMargins(0, dp(10), 0, dp(4)); parent.addView(view, params); view.setOnClickListener(v -> action.run()); return view;
     }
     private static String problem(String value) { switch (value) { case "engine": return "عطل محرك"; case "battery": return "بطارية"; case "tire": return "إطار"; case "accident": return "حادث"; default: return "مساعدة أخرى"; } }
-    private static String car(String value) { switch (value) { case "small": return "سيارة صغيرة"; case "suv": return "دفع رباعي"; case "truck": return "شاحنة"; default: return value; } }
+    private static String car(String value) { switch (value) { case "small": return "سيارة صغيرة"; case "suv": return "دفع رباعي"; case "truck": return "بيك أب / فان"; default: return value; } }
 }
