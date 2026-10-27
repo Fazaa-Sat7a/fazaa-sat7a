@@ -4,6 +4,8 @@ select public.test_assert(not exists(select 1 from public.fazaa_driver_fleet whe
 select public.test_assert(not has_table_privilege('authenticated','public.fazaa_vehicle_categories','insert'),'customers cannot approve categories');
 select public.test_assert(not has_function_privilege('anon','public.create_fazaa_category_request(double precision,double precision,text,text,text,text,text,boolean,integer,text)','execute'),'booking requires authenticated session');
 select set_config('request.jwt.claims','{"sub":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","role":"authenticated"}',false);
+-- Previous catalog tests rename fixture emails. Restore this test account explicitly.
+update auth.users set email='customer@example.test',email_confirmed_at=coalesce(email_confirmed_at,now()) where id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 select public.admin_set_fazaa_trial_customer('customer@example.test',true);
 -- Same pricing class, but only the first driver will be approved for passenger vehicles.
 select public.admin_save_fazaa_commercial('fleet','{"driver_id":"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee","truck_class_id":"11111111-1111-4111-8111-111111111111","region_code":"damascus","approved_categories":["pickup"]}');

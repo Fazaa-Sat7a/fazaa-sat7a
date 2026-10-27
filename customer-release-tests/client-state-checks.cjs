@@ -20,6 +20,15 @@ const root=__dirname+'/fixture-web';
  await context.rpc('create_request',{p_lat:33.5,p_lng:36.2,p_problem:'engine',p_phone:'0999999999'});
  assert.equal(captured.name,'create_fazaa_category_request');assert.equal(captured.args.p_category,'pickup');assert.equal(captured.args.p_vehicle_name,'فورد F-150');assert.equal(captured.args.p_year,2020);assert.equal(captured.args.p_enclosed,true);
  ids.get('truck-service').value='standard';ids.get('truck-service').handlers.change();assert.equal(ids.get('vehicle-year').value,'');assert(changes>=3);
+ // Both pricing modes must open the saved request even when history is empty.
+ for(const name of ['customer-app.js','customer-app-v03.js']){
+  const source=fs.readFileSync(root+'/assets/'+name,'utf8');
+  const line=source.split('\n').find(x=>x.includes("E('active-banner').addEventListener('click'"));
+  const handler=line.slice(line.indexOf("E('active-banner').addEventListener"));
+  let click,opened=null,navigated=null;
+  const env={E:()=>({addEventListener:(type,f)=>{click=f}}),rows:[],requestId:'saved-order',terminal:()=>false,openOrder:id=>{opened=id},go:page=>{navigated=page}};
+  vm.runInNewContext(handler,env);click();assert.equal(opened,'saved-order',name+' saved request banner');assert.equal(navigated,null);
+ }
  const html=fs.readFileSync(root+'/index.html','utf8');const refresh=html.split('\n').find(x=>x.startsWith('async function refresh(){'));const clear=html.split('\n').find(x=>x.startsWith('function clearUnavailableRequest('));const schedule=html.split('\n').find(x=>x.startsWith('function schedule('));
  const elements=new Map(),memory=new Map([['active','id-1']]);let mode='missing',rendered=0,retries=0;
  const state={requestId:'id-1',currentStatus:null,timer:null,loading:false,ACTIVE_KEY:'active',$:id=>{if(!elements.has(id))elements.set(id,{});return elements.get(id)},localStorage:{removeItem:k=>memory.delete(k)},clearTimeout(){},setTimeout(){retries++;},terminal:()=>false,clearHandoff(){},message(){},errorText:String,renderRequest(){rendered++},rpc:async()=>{if(mode==='offline')throw Error('offline');if(mode==='race'){state.requestId='id-2';return [];}return mode==='missing'?[]:[{status:'accepted'}]},Date};
