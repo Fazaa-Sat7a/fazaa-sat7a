@@ -6,9 +6,13 @@ on:
     paths:
       - 'android-client/**'
       - 'ci/customer_signing.py'
+      - 'ci/publish_customer.py'
       - '.github/workflows/customer-apk.yml'
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: fazaa-customer-release
+  cancel-in-progress: false
 jobs:
   build:
     if: github.ref == 'refs/heads/main'
@@ -62,6 +66,10 @@ jobs:
           path: ${{ runner.temp }}/fazaa-customer-apk/
           if-no-files-found: error
           retention-days: 30
+      - name: Publish verified APK and update channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ci/publish_customer.py --version-code "$((1000 + GITHUB_RUN_NUMBER))" --apk android-client/app/build/outputs/apk/release/app-release.apk
       - name: Remove runner-local signing material
         if: always()
         run: rm -rf -- "$RUNNER_TEMP/fazaa-customer-signing"
