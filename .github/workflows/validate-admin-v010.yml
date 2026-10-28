@@ -82,8 +82,23 @@ jobs:
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Compile and lint isolated Admin candidate
         working-directory: admin-release-tests/fixture-android-admin
-               run: |
-          gradle --no-daemon :app:assembleDebug :app:lintDebug || {
-            cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
-            exit 1
-          }
+        run: gradle --no-daemon :app:assembleDebug :app:lintDebug
+      - name: Show full lint report
+        if: always()
+        working-directory: admin-release-tests/fixture-android-admin
+        run: |
+          report=app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+          if [ -f "$report" ]; then
+            cat "$report"
+          else
+            echo "Lint report unavailable; inspect the build step above."
+          fi
+      - name: Save lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-lint-reports
+          path: |
+            admin-release-tests/fixture-android-admin/app/build/reports/lint-results-debug.*
+            admin-release-tests/fixture-android-admin/app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+          if-no-files-found: ignore
