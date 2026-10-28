@@ -27,6 +27,7 @@ public final class MainActivity extends Activity {
     private AlertDialog editor; private EditText email,password;
     private final Runnable poll=new Runnable(){public void run(){if(visible&&!busy&&editor==null&&api.signedIn()&&tab.equals("home"))load();main.postDelayed(this,30000);}};
     interface Job {Object run() throws Exception;} interface Done {void accept(Object value) throws Exception;}
+    interface FormSave {void accept(JSONObject value) throws Exception;}
     @Override public void onCreate(Bundle state){super.onCreate(state);api=new Api(this);updates=new AdminUpdates(this,()->visible&&editor==null&&!busy);shell();if(api.signedIn())load();else login();}
     @Override protected void onResume(){super.onResume();visible=true;main.removeCallbacks(poll);main.postDelayed(poll,30000);if(updates!=null&&!busy)updates.check(false);}
     @Override protected void onPause(){visible=false;main.removeCallbacks(poll);super.onPause();}
@@ -105,7 +106,7 @@ public final class MainActivity extends Activity {
     private void mutate(String rpc,JSONObject values){task(()->api.rpc(rpc,values),v->{notice.setText("تم الحفظ.");load();});}
     private static final class Field {String key,label,type;String[] ids,labels;Field(String k,String l,String t){key=k;label=l;type=t;}}
     private Field choice(String key,String title,String source){Field f=new Field(key,title,"choice");JSONArray list=array(commercial,source);f.ids=new String[list.length()];f.labels=new String[list.length()];for(int i=0;i<list.length();i++){JSONObject v=list.optJSONObject(i);f.ids[i]=v==null?"":v.optString(source.equals("regions")?"code":"id");f.labels[i]=v==null?"":str(v,"name");}return f;}
-    private void edit(String title,JSONObject initial,List<Field> fields,Done save){LinearLayout c=column();Map<String,View> controls=new HashMap<>();for(Field f:fields){View v;
+    private void edit(String title,JSONObject initial,List<Field> fields,FormSave save){LinearLayout c=column();Map<String,View> controls=new HashMap<>();for(Field f:fields){View v;
         if(f.type.equals("bool")){CheckBox b=new CheckBox(this);b.setText(f.label);b.setChecked(initial.optBoolean(f.key));c.addView(b);v=b;}
         else if(f.type.equals("choice")){Spinner sp=spinner(c,f.label,f.labels);for(int i=0;i<f.ids.length;i++)if(f.ids[i].equals(initial.optString(f.key)))sp.setSelection(i);v=sp;}
         else if(f.type.equals("categories")){LinearLayout checks=column();text(c,f.label,15,true,NAVY);c.addView(checks);String[] codes={"passenger","crossover","suv_large","low_clearance","pickup","van"};String[] labels={"سيارة ركوب / سيدان","كروس أوفر","SUV كبيرة","رياضية أو منخفضة","بيك أب","فان / ميني فان"};JSONArray selected=array(initial,f.key);for(int i=0;i<codes.length;i++){CheckBox b=new CheckBox(this);b.setText(labels[i]);b.setTag(codes[i]);for(int k=0;k<selected.length();k++)if(codes[i].equals(selected.optString(k)))b.setChecked(true);checks.addView(b);}v=checks;}
