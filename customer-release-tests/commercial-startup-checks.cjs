@@ -17,5 +17,5 @@ function environment(){
  vm.createContext(context);return {context,ids};
 }
 (async()=>{const {context,ids}=environment();vm.runInContext(source,context,{filename:'commercial-customer.js'});await new Promise(setImmediate);
- assert(context.window.FazaaCommercial,'commercial module must initialize');assert(!ids.has('vehicle-model'),'model catalog removed');assert(ids.has('destination-map'));assert.equal(context.window.FazaaCommercial.validateVehicle(),false,'no model cannot book');console.log('PASS: real commercial module initializes, creates price/destination controls, uses category module, and enforces required model');
+ assert(context.window.FazaaCommercial,'commercial module must initialize');assert(!ids.has('vehicle-model'),'model catalog removed');assert(ids.has('destination-map'));assert.equal(context.window.FazaaCommercial.validateVehicle(),false,'no model cannot book');console.log('PASS: real commercial module initializes, creates price/destination controls, uses category module, and enforces required category');
 })().catch(e=>{console.error(e);process.exitCode=1;});

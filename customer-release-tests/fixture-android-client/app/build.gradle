@@ -18,7 +18,7 @@ android {
         minSdk 26
         targetSdk 35
         versionCode requestedCode.toInteger()
-        versionName '0.5.1'
+        versionName '0.6.0'
     }
     signingConfigs {
         customerRelease {
