@@ -180,8 +180,8 @@ public final class MainActivity extends Activity {
         String note = DriverDisplay.text(offer.opt("note"), "");
         if (!note.isEmpty()) label(card, note, 15, false);
         fareDetails(card,offer);
-        button(card, "عرض الرحلة", () -> openTrip(offer), true);
-        primaryButton(card, "قبول الطلب", () -> app.accept(offer.optString("id")), !app.busy && app.service != null && offer.optJSONObject("_fazaa")!=null && System.currentTimeMillis() - syncedAt < 30000);
+        routeButton(card, "عرض الرحلة", () -> openTrip(offer), true);
+        actionButton(card, "قبول الطلب", () -> app.accept(offer.optString("id")), !app.busy && app.service != null && offer.optJSONObject("_fazaa")!=null && System.currentTimeMillis() - syncedAt < 30000,Color.rgb(21,128,61),Color.WHITE);
     }
 
     private void showCurrent(JSONObject request) {
@@ -189,23 +189,25 @@ public final class MainActivity extends Activity {
         DriverStage stage=DriverStage.of(status);
         LinearLayout card = card();
         label(card, stage==DriverStage.DONE||stage==DriverStage.CLOSED ? "تفاصيل الطلب" : "طلبك الحالي", 23, true);
-        label(card, stage.caption, 17, true);
+        TextView stageLabel=label(card, stage.caption, 17, true);
+        stageLabel.setTextColor(stageColor(stage));
+        stageLabel.setPadding(dp(12),dp(10),dp(12),dp(10));
+        GradientDrawable stageBackground=new GradientDrawable();stageBackground.setColor(Color.rgb(241,245,249));stageBackground.setCornerRadius(dp(12));stageLabel.setBackground(stageBackground);
         label(card, problem(request.optString("problem")) + " · " + car(request.optString("car_type")), 16, false);
         label(card, "مرجع الطلب: " + id.substring(0, Math.min(8, id.length())), 13, false);
         String note = DriverDisplay.text(request.opt("note"), "");
         if (!note.isEmpty()) label(card, note, 15, false);
         fareDetails(card,request);
-        if(stage.hasNext())primaryButton(card,stage.nextLabel,()->{
+        if(stage.hasNext())actionButton(card,stage.nextLabel,()->{
             if(stage==DriverStage.IN_PROGRESS)confirm("إنهاء الخدمة؟","تأكّد من اكتمال الخدمة وتسوية الأجرة الكاش قبل الإنهاء.",()->app.changeStatus(id,stage.nextStatus));
             else app.changeStatus(id,stage.nextStatus);
-        },!app.busy);
-        if(stage.pickupRoute())button(card,"المسار إلى العميل",()->openRoute(request,-1,"المسار إلى العميل"),true);
+        },!app.busy,stageColor(stage),Color.WHITE);
+        if(stage.pickupRoute())routeButton(card,"المسار إلى العميل",()->openRoute(request,-1,"المسار إلى العميل"),true);
         if(stage.deliveryRoutes())deliveryRoutes(card,request);
         String phone=DriverDisplay.text(request.opt("customer_phone"),"").replaceAll("[^0-9+]","");
-        if(stage.contact()&&!phone.isEmpty())button(card,"اتصال بالعميل",()->external(new Intent(Intent.ACTION_DIAL,Uri.parse("tel:"+phone))),true);
+        if(stage.contact()&&!phone.isEmpty())actionButton(card,"اتصال بالعميل",()->external(new Intent(Intent.ACTION_DIAL,Uri.parse("tel:"+phone))),true,Color.rgb(220,252,231),Color.rgb(21,128,61));
         if(stage.cancel()){
-            Button cancel=button(card,"إلغاء الطلب",()->confirm("إلغاء الطلب الحالي؟","أخبر العميل قبل الإلغاء.",()->app.changeStatus(id,"cancelled_driver")),!app.busy);
-            cancel.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(242,243,245)));cancel.setTextColor(Color.rgb(164,38,44));
+            Button cancel=actionButton(card,"إلغاء الطلب",()->confirm("إلغاء الطلب الحالي؟","أخبر العميل قبل الإلغاء.",()->app.changeStatus(id,"cancelled_driver")),!app.busy,Color.rgb(254,226,226),Color.rgb(153,27,27));
         }
         label(card, request.optJSONObject("_fazaa")!=null&&request.optJSONObject("_fazaa").optBoolean("priced")?"السعر مثبت؛ لا تضف مبلغاً خارج موافقة العميل في التطبيق.":"طلب قديم سابق لتفعيل التسعير الثابت.", 13, false);
     }
@@ -237,7 +239,7 @@ public final class MainActivity extends Activity {
         for(int i=0;i<stops.length();i++){
             if(stops.optJSONObject(i)==null)continue;
             final int stopIndex=i;String title=DriverDisplay.deliveryButton(i,stops.length());
-            button(card,title,()->openRoute(request,stopIndex,title),true);
+            routeButton(card,title,()->openRoute(request,stopIndex,title),true);
         }
     }
     private void openTrip(JSONObject request){openRoute(request,-2,"عرض الرحلة");}
@@ -321,6 +323,27 @@ public final class MainActivity extends Activity {
     private TextView label(LinearLayout parent, String text, int size, boolean bold) {
         TextView view = new TextView(this); view.setText(text); view.setTextSize(size); view.setTextColor(INK); view.setGravity(Gravity.START); view.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG); view.setPadding(0, dp(5), 0, dp(6));
         if (bold) view.setTypeface(null, Typeface.BOLD); parent.addView(view); return view;
+    }
+    private int stageColor(DriverStage stage){
+        switch(stage){
+            case ACCEPTED: return Color.rgb(29,78,216);
+            case ARRIVED: return Color.rgb(154,52,18);
+            case IN_PROGRESS: case DONE: return Color.rgb(21,128,61);
+            default: return INK;
+        }
+    }
+    private Button routeButton(LinearLayout parent,String text,Runnable action,boolean enabled){
+        return actionButton(parent,text,action,enabled,Color.rgb(219,234,254),Color.rgb(30,64,175));
+    }
+    private Button actionButton(LinearLayout parent,String text,Runnable action,boolean enabled,int background,int foreground){
+        Button view=button(parent,text,action,enabled);
+        view.setBackgroundTintList(null);
+        GradientDrawable normal=new GradientDrawable();normal.setColor(background);normal.setCornerRadius(dp(14));
+        GradientDrawable mask=new GradientDrawable();mask.setColor(Color.WHITE);mask.setCornerRadius(dp(14));
+        int ripple=foreground==Color.WHITE?Color.argb(65,255,255,255):Color.argb(35,0,0,0);
+        view.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(ripple),normal,mask));
+        view.setTextColor(foreground);view.setTypeface(null,Typeface.BOLD);view.setMinHeight(dp(56));
+        return view;
     }
     private Button primaryButton(LinearLayout parent,String text,Runnable action,boolean enabled){
         Button view=button(parent,text,action,enabled);
