@@ -55,7 +55,7 @@ const mock=`(()=>{
  await page.goto(base);await page.waitForFunction(()=>window.FazaaCustomerReady&&window.__calls.some(x=>x.name==='get_fazaa_category_catalog'));
  fs.mkdirSync(path.join(__dirname,'screenshots'),{recursive:true});
  assert.equal(await page.locator('#view-home .future-card:disabled').count(),4);
- for(const width of [320,390]){await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'home must fit small screens');}
+ for(const width of [320,360,390,430]){await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'home must fit small screens');}
  await page.screenshot({path:path.join(__dirname,'screenshots/customer-home.png'),fullPage:true});
  assert.equal(await page.locator('.bottom-nav button').count(),3);
  await page.click('#nav-account');await page.waitForSelector('#view-orders:visible');assert(await page.locator('#profile-name').innerText()==='خليل اختبار');
@@ -107,7 +107,7 @@ const mock=`(()=>{
  }catch(error){
   if(page){
    try{
-    console.error('BROWSER FAILURE STATE:',JSON.stringify(await page.evaluate(()=>({url:location.href,modelOptions:document.querySelector('#vehicle-model')?.options?.length,lastCalls:window.__calls?.slice(-8),notice:document.querySelector('#global-message')?.textContent})),null,2));
+    console.error('BROWSER FAILURE STATE:',JSON.stringify(await page.evaluate(()=>({url:location.href,modelOptions:document.querySelector('#vehicle-model')?.options?.length,lastCalls:window.__calls?.slice(-8),notice:document.querySelector('#global-message')?.textContent,viewport:innerWidth,documentWidth:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('body *')].filter(el=>{const r=el.getBoundingClientRect();return r.width>0&&(r.left < -1||r.right>innerWidth+1);}).slice(0,20).map(el=>({tag:el.tagName,id:el.id,classes:el.className,left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right}))})),null,2));
     fs.mkdirSync(path.join(__dirname,'screenshots'),{recursive:true});
     await page.screenshot({path:path.join(__dirname,'screenshots/failure.png'),fullPage:true});
    }catch(diagnostic){console.error('Diagnostic failed:',diagnostic.message);}
