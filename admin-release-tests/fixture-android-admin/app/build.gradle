@@ -1,0 +1,45 @@
+plugins { id 'com.android.application' }
+
+def signingFile = System.getenv('FAZAA_DRIVER_KEYSTORE_FILE')
+def signingPassword = System.getenv('FAZAA_DRIVER_KEYSTORE_PASSWORD')
+def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+def requestedCode = (project.findProperty('fazaaVersionCode') ?: '11').toString()
+if (!(requestedCode ==~ /[0-9]+/) || requestedCode.toLong() < 11 || requestedCode.toLong() > 2100000000L) {
+    throw new GradleException('Invalid driver version code')
+}
+if (releaseRequested && (!signingFile || !signingPassword || !file(signingFile).isFile())) {
+    throw new GradleException('Stable driver signing credentials are required for release; no debug fallback is allowed')
+}
+android {
+    namespace 'com.fazaa.admin'
+    buildFeatures { buildConfig true }
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.fazaa.admin'
+        minSdk 26
+        targetSdk 35
+        versionCode requestedCode.toInteger()
+        versionName '0.1.0'
+    }
+    signingConfigs {
+        driverRelease {
+            if (signingFile && signingPassword) {
+                storeFile file(signingFile)
+                storeType 'PKCS12'
+                storePassword signingPassword
+                keyAlias 'fazaa-driver'
+                keyPassword signingPassword
+            }
+        }
+    }
+    buildTypes {
+        // Development builds are separate from the driver's stable installed application.
+        debug { applicationIdSuffix '.dev'; versionNameSuffix '-debug' }
+        release {
+            signingConfig signingConfigs.driverRelease
+            debuggable false
+            minifyEnabled false
+        }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
