@@ -1,0 +1,132 @@
+name: Validate Fazaa Customer 0.6.1
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fazaa_commercial_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGDATABASE: fazaa_commercial_test
+      PGUSER: postgres
+      PGPASSWORD: test-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Create disposable fixture
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/base-fixture.sql
+      - name: Apply prior customer migrations
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/prior-migrations.sql
+      - name: Apply commercial migration
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/07-fares-fleet-ledger.sql
+      - name: Verify migration rerun safety
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/07-fares-fleet-ledger.sql
+      - name: Apply private trial add-on twice
+        run: |
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/08-private-trial.sql
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/08-private-trial.sql
+      - name: Exercise roles, pricing, fixed totals, matching, ledger and privacy
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/commercial-checks.sql
+      - name: Verify private trial gate and public fallback
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/private-trial-checks.sql
+      - name: Apply vehicle catalog add-on twice
+        run: |
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/09-vehicle-suggestions.sql
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/09-vehicle-suggestions.sql
+      - name: Verify suggestions and atomic imports
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/vehicle-checks.sql
+      - name: Apply category matching twice
+        run: |
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/10-vehicle-categories.sql
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/10-vehicle-categories.sql
+      - name: Verify fleet approvals and category booking
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/category-checks.sql
+      - name: Apply registered history migration twice
+        run: |
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/11-registered-history.sql
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/11-registered-history.sql
+      - name: Verify guest tracking and registered history
+        run: psql -v ON_ERROR_STOP=1 -f customer-release-tests/history-checks.sql
+      - name: Apply optional vehicle fields and search gate twice
+        run: |
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/15-customer-experience.sql
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/15-customer-experience.sql
+          psql -v ON_ERROR_STOP=1 -f customer-release-tests/experience-checks.sql
+  browser:
+    # Pinned to a platform supported by the selected Playwright release.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test runner
+        working-directory: customer-release-tests
+        run: npm install --no-save --ignore-scripts playwright@1.51.1
+      - name: Validate CSV import parser
+        run: node customer-release-tests/csv-checks.cjs
+      - name: Validate category and startup state
+        run: |
+          node customer-release-tests/client-state-checks.cjs
+          node customer-release-tests/experience-state-checks.cjs
+          node customer-release-tests/tracking-stage-checks.cjs
+          node customer-release-tests/navigation-checks.cjs
+          python3 customer-release-tests/publish-checks.py
+      - name: Install Chromium
+        working-directory: customer-release-tests
+        run: npx playwright install --with-deps chromium
+      - name: Exercise the actual HTML with mocked network services
+        run: node customer-release-tests/ui-checks.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: customer-v061-ui-test-screenshots
+          path: customer-release-tests/screenshots/
+          if-no-files-found: ignore
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Validate update URL and version policy
+        run: |
+          mkdir -p "$RUNNER_TEMP/customer-policy"
+          javac -d "$RUNNER_TEMP/customer-policy" customer-release-tests/fixture-android-client/app/src/main/java/com/fazaa/customer/UpdatePolicy.java customer-release-tests/UpdatePolicyChecks.java
+          java -cp "$RUNNER_TEMP/customer-policy" UpdatePolicyChecks
+      - name: Compile and lint the isolated app fixture
+        working-directory: customer-release-tests/fixture-android-client
+        run: gradle --no-daemon :app:assembleDebug :app:lintDebug
+      - name: Save Android lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: customer-v061-lint
+          path: customer-release-tests/fixture-android-client/app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore
