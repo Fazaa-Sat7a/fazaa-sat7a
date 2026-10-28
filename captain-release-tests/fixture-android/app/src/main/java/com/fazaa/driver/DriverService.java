@@ -85,6 +85,7 @@ public final class DriverService extends Service implements LocationListener {
 
     private Notification ongoing(String message) {
         return new Notification.Builder(this, TRACKING_CHANNEL).setSmallIcon(R.drawable.ic_truck)
+                .setColor(app.snapshot.available ? android.graphics.Color.rgb(21,128,61) : android.graphics.Color.rgb(100,116,139))
                 .setContentTitle(getString(R.string.app_name)).setContentText(message).setContentIntent(openApp())
                 .setStyle(new Notification.BigTextStyle().bigText(message + "\nافتح التطبيق لإدارة الاستقبال والخدمة."))
                 .setOngoing(true).setOnlyAlertOnce(true).setCategory(Notification.CATEGORY_SERVICE).build();

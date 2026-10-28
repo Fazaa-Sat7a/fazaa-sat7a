@@ -107,10 +107,15 @@ public final class MainActivity extends Activity {
             button(driver,"كشف العمولات والتسديدات",()->showLedger(finance),true);
         }
         boolean activeAccount = "active".equals(state.profile.optString("status"));
-        label(driver, !activeAccount ? "الحساب موقوف" : state.available ? (state.current == null ? "متاح لاستقبال الطلبات" : "مشغول بخدمة") : "غير متاح لطلبات جديدة", 17, true);
+        TextView availabilityLabel = label(driver, !activeAccount ? "الحساب موقوف" : state.available ? (state.current == null ? "متاح لاستقبال الطلبات" : "مشغول بخدمة") : "غير متاح لطلبات جديدة", 17, true);
+        availabilityLabel.setTextColor(state.available ? Color.rgb(21,128,61) : INK);
+        availabilityLabel.setText((state.available ? "● " : "○ ") + availabilityLabel.getText());
         label(driver, state.message, 14, false);
         String toggle = state.available ? "إيقاف استقبال الطلبات" : state.current != null && app.service == null ? "استئناف التتبع" : app.service != null ? "تشغيل استقبال الطلبات" : "ابدأ استقبال الطلبات";
-        button(driver, toggle, () -> { if (state.available) app.stopReceiving(); else startReceiving(); }, activeAccount && !app.busy);
+        Button availabilityButton = button(driver, toggle, () -> { if (state.available) app.stopReceiving(); else startReceiving(); }, activeAccount && !app.busy);
+        availabilityButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(state.available ? Color.rgb(21,128,61) : YELLOW));
+        availabilityButton.setTextColor(state.available ? Color.WHITE : INK);
+        availabilityButton.setTypeface(null,Typeface.BOLD);
         label(driver, "عند تشغيل الاستقبال، يستمر تحديث الموقع أثناء استخدام تطبيق آخر أو إطفاء الشاشة، مع إشعار ظاهر. أوقف الاستقبال عند انتهاء دوامك.", 13, false);
         if (app.service != null && !state.available && state.current == null) button(driver, "إيقاف التشغيل", app::stopReceiving, !app.busy);
         button(driver, "تحديث الحالة", app::refresh, !app.busy);
