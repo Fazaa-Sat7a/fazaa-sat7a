@@ -5,7 +5,7 @@
  let lastBinding='',syncing=null,dirty=false,scheduled=null,signingOut=false,opening=false;
  let card=null,caption=null;
  function device(){const d=window.FazaaPushDevice;return d&&UUID.test(d.installation_id)&&typeof d.token==='string'?d:null;}
- function status(text){if(!device())return;if(!card){card=document.createElement('section');card.className='surface push-card';const title=document.createElement('h2');title.textContent='إشعارات الطلب';caption=document.createElement('p');caption.className='muted';card.append(title,caption);document.getElementById('view-account').append(card);}caption.textContent=text;}
+ function status(text){if(!device())return;if(!card){card=document.createElement('section');card.className='surface push-card';const title=document.createElement('h2');title.textContent='إشعارات الطلب';caption=document.createElement('p');caption.className='muted';card.append(title,caption);document.getElementById('view-account').append(card);}caption.textContent=text;card.hidden=!text;}
  function schedule(delay=100){clearTimeout(scheduled);scheduled=setTimeout(()=>sync().catch(()=>{}),delay);}
  async function sync(){
   if(syncing){dirty=true;return syncing;}
@@ -24,7 +24,7 @@
     const current=await client.auth.getSession();
     if(current.data.session?.user.id!==session.user.id){dirty=true;continue;}
     lastBinding=key;
-    status(d.permission?'إشعارات الطلب مسموحة، وهذا الجهاز مرتبط بحسابك.':'الإشعارات غير مسموحة. افتح «إعدادات إشعارات الطلب» من حسابي لتشغيلها.');
+    status(d.permission?'':'الإشعارات متوقفة. افتح الإعدادات ← إشعارات طلبك لتشغيلها.');
    }while(dirty&&!signingOut);
   })();
   try{await syncing;}catch(e){lastBinding='';status('تعذّر ربط إشعارات الجهاز. افتح التطبيق عند عودة الإنترنت للمحاولة مجدداً.');schedule(30000);throw e;}
