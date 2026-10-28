@@ -75,9 +75,8 @@ public final class CaptainUpdates {
             if(code<=installed){if(manual)resultDialog("تطبيقك محدّث", "أنت تستخدم أحدث إصدار متاح لك.\nالإصدار المثبّت: "+info.versionName+"\nرقم البناء: "+installed);return;}
             if(!manual&&prefs.getLong("dismissed_version",0)==code)return;
             if(dialog!=null&&dialog.isShowing())return;
-            String notes=manifest.optString("notes","");if(notes.length()>1000)notes=notes.substring(0,1000);
             dialog=new AlertDialog.Builder(activity).setTitle("تحديث جديد لفزعة كابتن")
-                .setMessage("الإصدار "+name+" متاح الآن.\n"+notes+"\n\nحمّل التحديث وافتحه ثم اختر تحديث. لا تحذف التطبيق الحالي؛ سيبقى حسابك محفوظاً.")
+                .setMessage("الإصدار "+name+" متاح الآن.\nهل تريد تحميل التحديث؟")
                 .setPositiveButton("تحميل التحديث",(d,w)->{if(!canPrompt.getAsBoolean())return;try{activity.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}catch(android.content.ActivityNotFoundException e){toast("يلزم متصفح لفتح رابط التحديث.");}})
                 .setNegativeButton("لاحقاً",(d,w)->prefs.edit().putLong("dismissed_version",code).apply()).create();
             dialog.setOnCancelListener(d->prefs.edit().putLong("dismissed_version",code).apply());dialog.show();

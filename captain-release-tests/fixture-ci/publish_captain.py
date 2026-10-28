@@ -3,7 +3,7 @@ import argparse,hashlib,json,os,pathlib,re,subprocess,tempfile
 REPO='Fazaa-Sat7a/fazaa-sat7a'
 def manifest(code,apk,version):
     if not 1001<=code<=2100000000:raise ValueError('Invalid release code')
-    return {'packageId':'com.fazaa.driver.test','versionCode':code,'versionName':version,'apkUrl':f'https://github.com/{REPO}/releases/download/captain-v{code}/fazaa-captain.apk','sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'notes':'تحسين حالة استقبال الطلبات باللون الأخضر وتصحيح فحص التحديثات. يترافق الإصدار مع إصلاح اكتشاف الطلبات في قاعدة البيانات.'}
+    return {'packageId':'com.fazaa.driver.test','versionCode':code,'versionName':version,'apkUrl':f'https://github.com/{REPO}/releases/download/captain-v{code}/fazaa-captain.apk','sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'notes':''}
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--version-code',type=int,required=True);parser.add_argument('--apk',type=pathlib.Path,required=True);args=parser.parse_args()
     if os.environ.get('GITHUB_REPOSITORY')!=REPO:raise RuntimeError('Unexpected repository')
