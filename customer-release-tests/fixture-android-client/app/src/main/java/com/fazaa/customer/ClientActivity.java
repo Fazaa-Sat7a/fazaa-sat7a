@@ -35,7 +35,7 @@ import android.widget.Toast;
 /** Separate customer app. Hosted UI keeps the browser and app behavior aligned. */
 public final class ClientActivity extends Activity {
     private static final String ORIGIN = "https://fazaa-sat7a.github.io";
-    private static final String URL = ORIGIN + "/fazaa-sat7a/?app=1&v=060";
+    private static final String URL = ORIGIN + "/fazaa-sat7a/?app=1&v=061";
     private WebView web;
     private LinearLayout cover;
     private TextView message;
@@ -80,7 +80,7 @@ public final class ClientActivity extends Activity {
         settings.setSafeBrowsingEnabled(true);
         settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.6.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.6.1");
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         frame.addView(web, new FrameLayout.LayoutParams(-1,-1));
 

@@ -6,10 +6,10 @@ function environment(){
  class Element {
   constructor(tag='div'){this.tagName=tag;this.children=[];this.style={};this.attrs={};this.dataset={};this.value='';this.hidden=false;this.textContent='';const classes=new Set();this.classList={add:x=>classes.add(x),remove:x=>classes.delete(x),toggle:()=>{}};}
   set id(value){this._id=value;ids.set(value,this);}get id(){return this._id;}
-  append(...nodes){this.children.push(...nodes);}replaceChildren(...nodes){this.children=[...nodes];}before(){}insertBefore(n){this.append(n);}remove(){}addEventListener(){}setAttribute(k,v){this.attrs[k]=v;}querySelectorAll(){return [];}showModal(){this.open=true;}close(){this.open=false;}
+  prepend(...nodes){this.children.unshift(...nodes);}append(...nodes){this.children.push(...nodes);}replaceChildren(...nodes){this.children=[...nodes];}before(){}insertBefore(n){this.append(n);}remove(){}addEventListener(){}setAttribute(k,v){this.attrs[k]=v;}querySelectorAll(){return [];}showModal(){this.open=true;}close(){this.open=false;}
  }
  const html=fs.readFileSync(__dirname+'/fixture-web/index.html','utf8');for(const [,id]of html.matchAll(/\bid="([^"]+)"/g)){const n=new Element();n.id=id;}
- const document={body:new Element('body'),getElementById:id=>ids.get(id),createElement:tag=>new Element(tag),createTextNode:text=>Object.assign(new Element('text'),{textContent:text}),querySelector:()=>null};
+ const document={body:new Element('body'),getElementById:id=>ids.get(id),createElement:tag=>new Element(tag),createTextNode:text=>Object.assign(new Element('text'),{textContent:text}),querySelector:selector=>selector==='.progress-steps'?new Element():null};
  const status=new Element();status.id='vehicle-status';
  const model={id:'TEST-MODEL',make:'TEST',model:'sedan',car_type:'small',year_from:2010,year_to:2025};
  const catalog={enabled:true,vehicles:[model],matches:[]};

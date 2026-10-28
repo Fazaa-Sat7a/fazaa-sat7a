@@ -1,0 +1,17 @@
+'use strict';
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const source=fs.readFileSync(__dirname+'/fixture-web/assets/customer-experience.js','utf8');
+const start=source.indexOf(' function km('),end=source.indexOf(' const oldRender=renderRequest',start);
+const el=()=>({textContent:'',innerHTML:'',hidden:false,dataset:{},classList:{values:new Set(),toggle(k,on){if(on)this.values.add(k);else this.values.delete(k)},add(k){this.values.add(k)},remove(k){this.values.delete(k)}},style:{setProperty(k,v){this[k]=v}}});
+const env={Date,Number,Math,requestId:'order-1',window:{FazaaMaps:{valid:(lat,lng)=>lat!=null&&lng!=null&&Number.isFinite(Number(lat))&&Number.isFinite(Number(lng))}},sessionStorage:{values:new Map(),getItem(k){return this.values.get(k)},setItem(k,v){this.values.set(k,v)}},lastTrip:{id:'order-1',trip:{stops:[{lat:33.6,lng:36.3}]}},approach:el(),radar:el(),track:el(),truck:el(),title:el(),distance:el(),note:el(),targetLabel:el(),targetIcon:el()};
+vm.createContext(env);vm.runInContext(source.slice(start,end),env);
+const request={status:'new',lat:33.5,lng:36.2,driver_lat:33.52,driver_lng:36.22,driver_location_at:new Date().toISOString()};
+env.draw(request);assert.equal(env.approach.dataset.stage,'searching');assert.equal(env.radar.hidden,false);assert.equal(env.track.hidden,true);
+request.status='accepted';env.draw(request);assert.equal(env.approach.dataset.stage,'pickup');assert.equal(env.targetLabel.textContent,'سيارتك');const initial=env.truck.style['--progress'];
+request.driver_lat=33.51;request.driver_lng=36.21;env.draw(request);assert(parseFloat(env.truck.style['--progress'])>parseFloat(initial),'fresh approach moves truck');const progress=env.truck.style['--progress'];env.draw(request);assert.equal(env.truck.style['--progress'],progress,'polling without movement does not animate');
+request.driver_location_at=new Date(Date.now()-120000).toISOString();request.driver_lat=33.5;env.draw(request);assert(env.approach.classList.values.has('stale'));assert.equal(env.truck.style['--progress'],progress,'stale GPS freezes last position');
+request.status='arrived';env.draw(request);assert.equal(env.approach.dataset.stage,'pickup');assert.equal(env.targetLabel.textContent,'سيارتك');assert.equal(env.truck.style['--progress'],'100%');
+request.status='in_progress';request.driver_location_at=new Date().toISOString();env.draw(request);assert.equal(env.approach.dataset.stage,'destination');assert.equal(env.targetLabel.textContent,'وجهة التوصيل');assert.equal(env.truck.style['--progress'],'0%','transport starts a separate stage');
+request.driver_lat=33.55;request.driver_lng=36.25;env.draw(request);assert(parseFloat(env.truck.style['--progress'])>0);
+request.status='done';env.draw(request);assert.equal(env.approach.hidden,true);
+console.log('PASS: radar only while searching, pickup through arrival, destination only on transport, real movement, stale freeze and completed hide');
