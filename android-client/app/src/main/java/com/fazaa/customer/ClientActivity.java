@@ -35,7 +35,7 @@ import android.widget.Toast;
 /** Separate customer app. Hosted UI keeps the browser and app behavior aligned. */
 public final class ClientActivity extends Activity {
     private static final String ORIGIN = "https://fazaa-sat7a.github.io";
-    private static final String URL = ORIGIN + "/fazaa-sat7a/?app=1&v=051";
+    private static final String URL = ORIGIN + "/fazaa-sat7a/?app=1&v=060";
     private WebView web;
     private LinearLayout cover;
     private TextView message;
@@ -49,12 +49,17 @@ public final class ClientActivity extends Activity {
     private LinearLayout notificationBanner;
     private String notificationRequest;
     private boolean destroyed;
+    private boolean visible;
+    private boolean updatePromptsAllowed;
+    private Runnable updateGateTick;
+    private CustomerUpdates updates;
     private static WeakReference<ClientActivity> visibleActivity = new WeakReference<>(null);
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         visibleActivity = new WeakReference<>(this);
         PushStore.createChannel(this);
+        updates=new CustomerUpdates(this,()->visible&&!destroyed&&updatePromptsAllowed&&cover!=null&&cover.getVisibility()==View.GONE);
         notificationRequest=PushStore.requestId(getIntent().getStringExtra("request_id"));
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -75,7 +80,7 @@ public final class ClientActivity extends Activity {
         settings.setSafeBrowsingEnabled(true);
         settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.5.1");
+        settings.setUserAgentString(settings.getUserAgentString() + " FazaaCustomer/0.6.0");
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         frame.addView(web, new FrameLayout.LayoutParams(-1,-1));
 
@@ -117,6 +122,10 @@ public final class ClientActivity extends Activity {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if (!request.isForMainFrame()) return true;
                 if (trustedPage(request.getUrl())) {
+                    if ("updates".equals(request.getUrl().getQueryParameter("native"))) {
+                        if(request.hasGesture()){updatePromptsAllowed=true;updates.check(true);}
+                        return true;
+                    }
                     if ("notifications".equals(request.getUrl().getQueryParameter("native"))) {
                         if (request.hasGesture()) requestNotifications();
                         return true;
@@ -124,6 +133,12 @@ public final class ClientActivity extends Activity {
                     return false;
                 }
                 openExternal(request.getUrl()); return true;
+            }
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
+                if((ORIGIN+"/fazaa-sat7a/assets/vehicle-directory.js").equals(request.getUrl().buildUpon().clearQuery().build().toString())){
+                    try{return new WebResourceResponse("application/javascript","UTF-8",getAssets().open("vehicle-directory.js"));}catch(java.io.IOException ignored){}
+                }
+                return null;
             }
             @Override public void onPageFinished(WebView view, String url) {
                 if (!failed && trustedPage(Uri.parse(url))) {
@@ -147,6 +162,13 @@ public final class ClientActivity extends Activity {
         refreshPushToken();
     }
 
+    private void observeUpdateGate(){
+        if(updateGateTick!=null)launchHandler.removeCallbacks(updateGateTick);
+        if(!visible||destroyed)return;
+        if(isCustomerPage())web.evaluateJavascript("Boolean(window.FazaaCustomerReady && document.getElementById('view-request')?.hidden && !window.FazaaApp?.authBusy && !document.querySelector('dialog[open]'))",value->{if(visible&&!destroyed){boolean wasAllowed=updatePromptsAllowed;updatePromptsAllowed="true".equals(value);if(updatePromptsAllowed&&!wasAllowed&&updates!=null)updates.resumeDownload(false);}});
+        updateGateTick=()->observeUpdateGate();launchHandler.postDelayed(updateGateTick,1000);
+    }
+    void updateState(String state){if(isCustomerPage())web.evaluateJavascript("window.FazaaUpdateState="+JSONObject.quote(state)+";window.dispatchEvent(new Event('fazaa-update-state'));",null);}
     private void load() {
         failed = false;
         launchGeneration++;splash.setLoading(true);
@@ -167,6 +189,7 @@ public final class ClientActivity extends Activity {
             if(destroyed||failed||generation!=launchGeneration)return;
             if("true".equals(ready)){
                 cover.setVisibility(View.GONE);splash.setLoading(false);publishPushDevice();deliverNotificationRequest();showNotificationIntro();
+                launchHandler.postDelayed(()->{if(visible&&!destroyed){updates.resumeDownload(false);updates.check(false);}},3000);
             }else if(attempt>=80)showFailure();
             else launchHandler.postDelayed(()->waitForCustomerUI(generation,attempt+1),250);
         });
@@ -268,13 +291,14 @@ public final class ClientActivity extends Activity {
     }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     @Override protected void onResume() {
-        super.onResume(); visibleActivity = new WeakReference<>(this);
-        web.onResume(); updateNotificationBanner(); publishPushDevice(); refreshPushToken();
+        super.onResume(); visible=true; visibleActivity = new WeakReference<>(this);
+        web.onResume();observeUpdateGate(); updateNotificationBanner(); publishPushDevice(); refreshPushToken();
         deliverNotificationRequest();
+        if(updates!=null)updates.resumeDownload(false);
     }
-    @Override protected void onPause() { web.onPause(); super.onPause(); }
+    @Override protected void onPause() { visible=false;updatePromptsAllowed=false;if(updateGateTick!=null)launchHandler.removeCallbacks(updateGateTick);if(updates!=null)updates.hideDuringTrip();web.onPause(); super.onPause(); }
     @Override protected void onDestroy() {
-        destroyed=true;launchGeneration++;launchHandler.removeCallbacksAndMessages(null);splash.setLoading(false);
+        destroyed=true;if(updates!=null)updates.close();launchGeneration++;launchHandler.removeCallbacksAndMessages(null);splash.setLoading(false);
         if(visibleActivity.get()==this) visibleActivity.clear();
         clearLocationPrompt(); web.stopLoading(); web.setWebChromeClient(null);
         ((android.view.ViewGroup)web.getParent()).removeView(web); web.destroy(); super.onDestroy();
