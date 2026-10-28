@@ -82,4 +82,8 @@ jobs:
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Compile and lint isolated Admin candidate
         working-directory: admin-release-tests/fixture-android-admin
-        run: gradle --no-daemon :app:assembleDebug :app:lintDebug
+               run: |
+          gradle --no-daemon :app:assembleDebug :app:lintDebug || {
+            cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+            exit 1
+          }
